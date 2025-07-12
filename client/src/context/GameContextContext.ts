@@ -1,5 +1,5 @@
+﻿import { createContext } from "react";
 import type { Card, GameState } from "../types/game";
-import { createContext } from "react";
 
 interface CreateRoomData {
   roomId: string;
@@ -24,7 +24,11 @@ interface PlayCardData {
   card: Card;
 }
 
-type Callback = (res: { error?: string; myPlayerId?: string }) => void;
+type Callback = (res: {
+  error?: string;
+  myPlayerId?: string;
+  isComplete?: boolean;
+}) => void;
 
 interface GameContextProps {
   state: GameState | null;

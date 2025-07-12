@@ -6,7 +6,6 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit"
   },
-  "files.eol": "\n",
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
   "files.trimTrailingWhitespace": true

@@ -7,6 +7,12 @@ import type { Card as CardType } from "../types/game";
 import Card from "./Card";
 
 const GameTable: React.FC = () => {
+  const gameContext = useContext(GameContext);
+  const { state, playCard, myPlayerId } = gameContext || {};
+  const myPlayer =
+    state && myPlayerId
+      ? state.players?.find((p) => p.id === myPlayerId)
+      : undefined;
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [exchangeSelectedIdxs, setExchangeSelectedIdxs] = useState<number[]>(
     []
@@ -14,18 +20,30 @@ const GameTable: React.FC = () => {
   const [isExchanging, setIsExchanging] = useState(false);
   const [showExchangeAnimation, setShowExchangeAnimation] = useState(false);
   const [receivedCards, setReceivedCards] = useState<CardType[]>([]);
+  const [showLeadNotice, setShowLeadNotice] = useState(false);
   const prevIsMyTurn = useRef(false);
-  const gameContext = useContext(GameContext);
-
-  // スクロール関連のref
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const simpleBarRef = useRef<SimpleBarCore | null>(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
   const scrollStartX = useRef(0);
 
-  // ゲームコンテキスト取得
-  const { state, playCard, myPlayerId } = gameContext || {};
+  // スクロール処理
+  const scrollBy = (delta: number) => {
+    if (simpleBarRef.current) {
+      const scrollElement = simpleBarRef.current.getScrollElement();
+      if (scrollElement) {
+        scrollElement.scrollLeft += delta;
+      }
+    }
+  };
+
+  // ドラッグスクロール処理
+  const handleMouseUp = () => {
+    isDragging.current = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  };
 
   // 自分のターン判定
   const isMyTurn = (() => {
@@ -55,35 +73,46 @@ const GameTable: React.FC = () => {
     return nextPlayerId === myPlayerId;
   })();
 
-  // プレイフェーズで自分の初手番なら表示するフラグ
-  const [showLeadNotice, setShowLeadNotice] = useState(false);
-
-  console.log("=== GameTable Debug ===");
-  console.log("gameContext:", gameContext);
-  console.log("state:", state);
-  console.log("myPlayerId:", myPlayerId);
-  console.log("isConnected:", gameContext?.isConnected);
-  console.log("isMyTurn:", isMyTurn);
-  console.log("exchangeSelectedIdxs:", exchangeSelectedIdxs);
-  console.log("isExchanging:", isExchanging);
-  console.log("receivedCards:", receivedCards);
-  console.log("showExchangeAnimation:", showExchangeAnimation);
-
-  // スクロール処理
-  const scrollBy = (delta: number) => {
-    if (simpleBarRef.current) {
-      const scrollElement = simpleBarRef.current.getScrollElement();
-      if (scrollElement) {
-        scrollElement.scrollLeft += delta;
-      }
+  // エラーハンドリング
+  let errorMessage: string | null = null;
+  try {
+    if (!gameContext) {
+      errorMessage = "ゲームコンテキストが見つかりません";
+    } else if (!state) {
+      errorMessage = "ゲーム状態が読み込まれていません";
+    } else if (!myPlayerId) {
+      errorMessage = "プレイヤーIDが設定されていません";
+    } else if (!myPlayer) {
+      errorMessage = `プレイヤーが見つかりません: ${myPlayerId}`;
+    } else if (!myPlayer.hand || !Array.isArray(myPlayer.hand)) {
+      errorMessage = "手札データが不正です";
     }
-  };
+  } catch (error) {
+    console.error("レンダリングエラー:", error);
+    errorMessage = `レンダリングエラー: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
+  }
 
-  // マウスホイールスクロール
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    scrollBy(e.deltaX + e.deltaY);
-  };
+  // デバッグ用：常に表示されるエラー情報
+  console.log("=== GameTable レンダリング状態 ===");
+  console.log("gameContext存在:", !!gameContext);
+  console.log("state存在:", !!state);
+  console.log("myPlayerId:", myPlayerId);
+  console.log("myPlayer存在:", !!myPlayer);
+  console.log("state?.phase:", state?.phase);
+  console.log("state?.currentRound:", state?.currentRound);
+  console.log("state?.rounds?.length:", state?.rounds?.length);
+  if (state?.rounds && state.currentRound !== undefined) {
+    console.log("currentRound存在:", !!state.rounds[state.currentRound]);
+    if (state.rounds[state.currentRound]) {
+      console.log(
+        "currentRound.receivedCards:",
+        state.rounds[state.currentRound].receivedCards
+      );
+    }
+  }
+  console.log("errorMessage:", errorMessage);
 
   // キーボード矢印キー
   useEffect(() => {
@@ -100,38 +129,6 @@ const GameTable: React.FC = () => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  // ドラッグスクロール
-  const handleMouseDown = (e: React.MouseEvent) => {
-    isDragging.current = true;
-    dragStartX.current = e.clientX;
-    if (simpleBarRef.current) {
-      const scrollElement = simpleBarRef.current.getScrollElement();
-      if (scrollElement) {
-        scrollStartX.current = scrollElement.scrollLeft;
-      }
-    }
-    document.body.style.cursor = "grabbing";
-    document.body.style.userSelect = "none";
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging.current) return;
-
-    const deltaX = dragStartX.current - e.clientX;
-    if (simpleBarRef.current) {
-      const scrollElement = simpleBarRef.current.getScrollElement();
-      if (scrollElement) {
-        scrollElement.scrollLeft = scrollStartX.current + deltaX;
-      }
-    }
-  };
-
-  const handleMouseUp = () => {
-    isDragging.current = false;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  };
 
   // マウスが手札エリアから離れた時の処理
   useEffect(() => {
@@ -161,92 +158,66 @@ const GameTable: React.FC = () => {
       if (!showExchangeAnimation) {
         setIsExchanging(false);
       }
-      // プレイフェーズに移行したら受け取ったカードを設定
-      if (state?.phase === "playing" && myPlayerId) {
-        const currentRound = state.rounds[state.currentRound];
-        console.log("プレイフェーズ移行 - 現在のラウンド:", currentRound);
-        console.log("receivedCards:", currentRound?.receivedCards);
-        console.log("myPlayerId:", myPlayerId);
-
-        if (currentRound?.receivedCards?.[myPlayerId]) {
-          console.log(
-            "受け取ったカードを設定:",
-            currentRound.receivedCards[myPlayerId]
-          );
-          setReceivedCards(currentRound.receivedCards[myPlayerId]);
-        }
-        // 3秒後にリセット
-        setTimeout(() => {
-          setReceivedCards([]);
-        }, 3000);
-      }
+    } else {
+      // 交換フェーズに戻った場合は状態をリセット
+      setShowExchangeAnimation(false);
+      setReceivedCards([]);
     }
-  }, [
-    state?.phase,
-    showExchangeAnimation,
-    myPlayerId,
-    state?.rounds,
-    state?.currentRound,
-    isExchanging,
-  ]);
+  }, [state?.phase, showExchangeAnimation, isExchanging]);
 
-  // 交換完了時のアニメーション表示
+  // 交換完了時のアニメーション表示（シンプル版）
   useEffect(() => {
-    console.log("=== アニメーション表示チェック ===");
-    console.log("フェーズ:", state?.phase);
-    console.log("isExchanging:", isExchanging);
+    console.log("=== アニメーション表示チェック（シンプル版） ===");
+    console.log("state?.phase:", state?.phase);
     console.log("myPlayerId:", myPlayerId);
+    console.log("state?.rounds:", state?.rounds);
+    console.log("state?.currentRound:", state?.currentRound);
 
-    if (state?.phase === "playing" && isExchanging && myPlayerId) {
+    // プレイフェーズで、かつアニメーション未表示の場合のみチェック
+    if (
+      state?.phase === "playing" &&
+      myPlayerId &&
+      state.rounds &&
+      state.currentRound !== undefined &&
+      !showExchangeAnimation
+    ) {
       const currentRound = state.rounds[state.currentRound];
-      console.log("アニメーション表示条件満たす");
       console.log("currentRound:", currentRound);
-      console.log("receivedCards:", currentRound?.receivedCards);
+      console.log("currentRound?.receivedCards:", currentRound?.receivedCards);
 
-      if (currentRound?.receivedCards?.[myPlayerId]) {
-        console.log("受け取ったカードあり - アニメーション表示");
-        console.log("表示するカード:", currentRound.receivedCards[myPlayerId]);
+      // 受け取ったカードがある場合
+      if (
+        currentRound?.receivedCards?.[myPlayerId] &&
+        currentRound.receivedCards[myPlayerId].length > 0
+      ) {
+        console.log("受け取ったカードを発見！アニメーション表示開始");
+        console.log("カード:", currentRound.receivedCards[myPlayerId]);
+
+        // アニメーション表示
         setReceivedCards(currentRound.receivedCards[myPlayerId]);
         setShowExchangeAnimation(true);
+        setIsExchanging(false);
+
+        // 5秒後にアニメーション終了
         const timer = setTimeout(() => {
-          console.log("アニメーションタイマー完了");
+          console.log("アニメーション終了");
           setShowExchangeAnimation(false);
-          setIsExchanging(false);
-          setReceivedCards([]); // アニメーション終了時にリセット
-        }, 5000); // 5秒に延長
+          setReceivedCards([]);
+        }, 5000);
+
         return () => {
           console.log("アニメーションクリーンアップ");
           clearTimeout(timer);
-          setShowExchangeAnimation(false);
-          setIsExchanging(false);
         };
       }
     }
   }, [
     state?.phase,
-    isExchanging,
     myPlayerId,
     state?.rounds,
     state?.currentRound,
-    state,
+    showExchangeAnimation,
   ]);
-
-  // カード交換選択処理
-  const handleExchangeCardSelect = (cardIndex: number) => {
-    if (state?.phase !== "exchanging" || isExchanging) return;
-
-    setExchangeSelectedIdxs((prev) => {
-      const isSelected = prev.includes(cardIndex);
-      if (isSelected) {
-        // 選択解除
-        return prev.filter((idx) => idx !== cardIndex);
-      } else {
-        // 選択追加（3枚まで）
-        if (prev.length >= 3) return prev;
-        return [...prev, cardIndex];
-      }
-    });
-  };
 
   // ターン通知の表示制御
   useEffect(() => {
@@ -278,6 +249,138 @@ const GameTable: React.FC = () => {
     }
   }, [state?.phase, state?.currentRound, myPlayerId, state?.rounds, state]);
 
+  if (errorMessage) {
+    return (
+      <div className="relative w-full h-screen bg-red-900 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">
+            エラーが発生しました
+          </h2>
+          <p className="text-gray-700 mb-4">{errorMessage}</p>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                setShowExchangeAnimation(false);
+                setReceivedCards([]);
+                setIsExchanging(false);
+                setExchangeSelectedIdxs([]);
+                setSelectedIdx(null);
+              }}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              再試行
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 block w-full"
+            >
+              ページを再読み込み
+            </button>
+          </div>
+          <div className="mt-4 text-xs text-gray-500">
+            <p>デバッグ情報:</p>
+            <p>gameContext: {gameContext ? "存在" : "なし"}</p>
+            <p>state: {gameContext?.state ? "存在" : "なし"}</p>
+            <p>myPlayerId: {gameContext?.myPlayerId || "なし"}</p>
+            <p>phase: {gameContext?.state?.phase || "なし"}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!state || !myPlayerId || !myPlayer) {
+    return (
+      <div className="relative w-full h-screen bg-gray-800 flex items-center justify-center">
+        <div className="text-white text-xl">読み込み中...</div>
+      </div>
+    );
+  }
+
+  console.log("=== GameTable Debug ===");
+  console.log("gameContext:", gameContext);
+  console.log("state:", state);
+  console.log("myPlayerId:", myPlayerId);
+  console.log("isConnected:", gameContext?.isConnected);
+  console.log("isMyTurn:", isMyTurn);
+  console.log("exchangeSelectedIdxs:", exchangeSelectedIdxs);
+  console.log("isExchanging:", isExchanging);
+  console.log("receivedCards:", receivedCards);
+  console.log("showExchangeAnimation:", showExchangeAnimation);
+  console.log("state?.phase:", state?.phase);
+  console.log("state?.rounds:", state?.rounds);
+  console.log("state?.currentRound:", state?.currentRound);
+  if (state?.rounds && state.currentRound !== undefined) {
+    console.log("currentRound:", state.rounds[state.currentRound]);
+    console.log(
+      "currentRound?.receivedCards:",
+      state.rounds[state.currentRound]?.receivedCards
+    );
+  }
+
+  // レンダリング条件の詳細ログ
+  console.log("=== レンダリング条件チェック ===");
+  console.log("gameContext存在:", !!gameContext);
+  console.log("state存在:", !!state);
+  console.log("myPlayerId存在:", !!myPlayerId);
+  console.log(
+    "myPlayer存在:",
+    !!state?.players?.find((p) => p.id === myPlayerId)
+  );
+  console.log(
+    "手札枚数:",
+    state?.players?.find((p) => p.id === myPlayerId)?.hand?.length || 0
+  );
+
+  // マウスホイールスクロール
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    scrollBy(e.deltaX + e.deltaY);
+  };
+
+  // ドラッグスクロール
+  const handleMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    if (simpleBarRef.current) {
+      const scrollElement = simpleBarRef.current.getScrollElement();
+      if (scrollElement) {
+        scrollStartX.current = scrollElement.scrollLeft;
+      }
+    }
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+
+    const deltaX = dragStartX.current - e.clientX;
+    if (simpleBarRef.current) {
+      const scrollElement = simpleBarRef.current.getScrollElement();
+      if (scrollElement) {
+        scrollElement.scrollLeft = scrollStartX.current + deltaX;
+      }
+    }
+  };
+
+  // カード交換選択処理
+  const handleExchangeCardSelect = (cardIndex: number) => {
+    if (state?.phase !== "exchanging" || isExchanging) return;
+
+    setExchangeSelectedIdxs((prev) => {
+      const isSelected = prev.includes(cardIndex);
+      if (isSelected) {
+        // 選択解除
+        return prev.filter((idx) => idx !== cardIndex);
+      } else {
+        // 選択追加（3枚まで）
+        if (prev.length >= 3) return prev;
+        return [...prev, cardIndex];
+      }
+    });
+  };
+
   // 現在の手番プレイヤーIDを取得
   const getCurrentTurnPlayerId = () => {
     if (!state || !state.rounds.length) return null;
@@ -286,6 +389,10 @@ const GameTable: React.FC = () => {
     if (state.phase !== "playing") return null;
     const currentTrick = currentRound.tricks[currentRound.tricks.length - 1];
     if (!currentTrick) return null;
+    // カードが1枚も出ていない場合はリードプレイヤー
+    if (currentTrick.cards.length === 0) {
+      return currentRound.leadPlayerId;
+    }
     // それ以降の直前のプレイヤーの次
     const lastPlayerId =
       currentTrick.cards[currentTrick.cards.length - 1].playerId;
@@ -302,18 +409,28 @@ const GameTable: React.FC = () => {
   const isMyTurnNow = currentTurnPlayerId === myPlayerId;
 
   if (!gameContext) {
+    console.log("❌ 早期リターン: gameContextが見つかりません");
     return <div>ゲームコンテキストが見つかりません</div>;
   }
 
   if (!state || !myPlayerId) {
+    console.log("❌ 早期リターン: stateまたはmyPlayerIdがありません", {
+      state: !!state,
+      myPlayerId: !!myPlayerId,
+    });
     return <div>ゲーム状態を読み込み中...</div>;
   }
 
   // 自分のプレイヤーを取得
-  const myPlayer = state.players.find((p) => p.id === myPlayerId);
   if (!myPlayer) {
+    console.log("❌ 早期リターン: 自分のプレイヤーが見つかりません", {
+      myPlayerId,
+      players: state.players.map((p) => ({ id: p.id, name: p.name })),
+    });
     return <div>プレイヤーが見つかりません</div>;
   }
+
+  console.log("✅ レンダリング条件クリア: 正常にレンダリング開始");
 
   // 自分のプレイヤーを基準にプレイヤーを並び替え
   let sortedPlayers: typeof state.players = [];
@@ -647,7 +764,7 @@ const GameTable: React.FC = () => {
                       }`}
                     >
                       {player.name}
-                      {isMe && " (あなぁE"}
+                      {isMe && " (あなた)"}
                     </span>
                     <div className="text-right">
                       <div
@@ -680,7 +797,7 @@ const GameTable: React.FC = () => {
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span>獲得トリック: {player.tricks.length}囁E</span>
+                      <span>獲得トリック: {player.tricks.length}個</span>
                     </div>
                   </div>
                 </div>
@@ -744,7 +861,7 @@ const GameTable: React.FC = () => {
                           }`}
                         >
                           {player.name}
-                          {isMe && " (あなぁE"}
+                          {isMe && " (あなた)"}
                         </span>
                       </div>
                       <div className="text-right">
@@ -820,7 +937,7 @@ const GameTable: React.FC = () => {
       )}
 
       {/* カード交換アニメーション */}
-      {showExchangeAnimation && (
+      {showExchangeAnimation && receivedCards.length > 0 && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded-lg shadow-lg text-center">
             <h3 className="text-xl font-bold mb-4 text-green-600">
@@ -846,9 +963,40 @@ const GameTable: React.FC = () => {
             <p className="text-sm text-gray-600">
               アニメーション表示中... (5秒)
             </p>
-            <div className="mt-2 text-xs text-gray-500">
-              チェック: receivedCards.length = {receivedCards.length}
+            <div className="mt-2 text-xs text-gray-500">デバッグ情報:</div>
+            <div className="mt-1 text-xs text-gray-500">
+              showExchangeAnimation: {showExchangeAnimation.toString()}
             </div>
+            <div className="mt-1 text-xs text-gray-500">
+              receivedCards.length: {receivedCards.length}
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              state?.phase: {state?.phase}
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              isExchanging: {isExchanging.toString()}
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              myPlayerId: {myPlayerId}
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              currentRound: {state?.currentRound}
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              receivedCards詳細: {JSON.stringify(receivedCards)}
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              現在時刻: {new Date().toLocaleTimeString()}
+            </div>
+            <button
+              onClick={() => {
+                setShowExchangeAnimation(false);
+                setReceivedCards([]);
+              }}
+              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              閉じる
+            </button>
           </div>
         </div>
       )}
@@ -917,7 +1065,7 @@ const GameTable: React.FC = () => {
                       }
                     >
                       {player.name}
-                      {isMe && " (あなぁE"}
+                      {isMe && " (あなた)"}
                       {isHost && (
                         <span className="ml-2 bg-purple-500 text-white px-2 py-0.5 rounded text-xxs font-bold">
                           ホスト
@@ -964,12 +1112,28 @@ const GameTable: React.FC = () => {
                     const selectedCards = exchangeSelectedIdxs.map(
                       (idx) => sortedHand[idx]
                     );
-                    gameContext.exchangeCards({
-                      roomId: state.roomId,
-                      selectedCardsMap: {
-                        [myPlayerId]: selectedCards,
+                    gameContext.exchangeCards(
+                      {
+                        roomId: state.roomId,
+                        selectedCardsMap: {
+                          [myPlayerId]: selectedCards,
+                        },
                       },
-                    });
+                      (res) => {
+                        console.log("exchangeCards応答:", res);
+                        if (res?.error) {
+                          console.error("カード交換エラー:", res.error);
+                          setIsExchanging(false);
+                        } else if (res?.isComplete === false) {
+                          // 全員の交換が完了していない場合はisExchangingを維持
+                          console.log("全員の交換完了待機中...");
+                        } else {
+                          // 交換完了またはエラーの場合はisExchangingをリセット
+                          console.log("カード交換完了またはエラー");
+                          setIsExchanging(false);
+                        }
+                      }
+                    );
                   }}
                 >
                   交換確定
@@ -1137,6 +1301,135 @@ const GameTable: React.FC = () => {
             </button>
           </div>
         )}
+      </div>
+
+      {/* テスト用: デバッグボタン群 */}
+      <div className="absolute top-4 right-4 z-50 space-y-2">
+        {/* 強制アニメーション表示ボタン */}
+        {state?.phase === "playing" && (
+          <button
+            onClick={() => {
+              console.log("テスト: 強制アニメーション表示");
+              setShowExchangeAnimation(true);
+              setReceivedCards([
+                { suit: "hearts", rank: "A", id: "test-1" },
+                { suit: "spades", rank: "K", id: "test-2" },
+                { suit: "diamonds", rank: "Q", id: "test-3" },
+              ]);
+              setTimeout(() => {
+                setShowExchangeAnimation(false);
+                setReceivedCards([]);
+              }, 5000);
+            }}
+            className="bg-red-500 text-white px-4 py-2 rounded text-sm block w-full"
+          >
+            テスト: アニメーション表示
+          </button>
+        )}
+
+        {/* 状態リセットボタン */}
+        <button
+          onClick={() => {
+            console.log("テスト: 状態リセット");
+            setShowExchangeAnimation(false);
+            setReceivedCards([]);
+            setIsExchanging(false);
+            setExchangeSelectedIdxs([]);
+            setSelectedIdx(null);
+          }}
+          className="bg-orange-500 text-white px-4 py-2 rounded text-sm block w-full"
+        >
+          状態リセット
+        </button>
+
+        {/* デバッグ情報表示ボタン */}
+        <button
+          onClick={() => {
+            console.log("=== 現在の状態詳細 ===");
+            console.log("state:", state);
+            console.log("myPlayerId:", myPlayerId);
+            console.log("showExchangeAnimation:", showExchangeAnimation);
+            console.log("receivedCards:", receivedCards);
+            console.log("isExchanging:", isExchanging);
+            console.log("exchangeSelectedIdxs:", exchangeSelectedIdxs);
+            console.log("selectedIdx:", selectedIdx);
+
+            // 現在のラウンド情報も表示
+            if (state?.rounds && state.currentRound !== undefined) {
+              const currentRound = state.rounds[state.currentRound];
+              console.log("currentRound:", currentRound);
+              console.log(
+                "currentRound?.receivedCards:",
+                currentRound?.receivedCards
+              );
+              console.log(
+                "currentRound?.receivedCards[myPlayerId]:",
+                currentRound?.receivedCards?.[myPlayerId]
+              );
+            }
+
+            alert("デバッグ情報をコンソールに出力しました");
+          }}
+          className="bg-blue-500 text-white px-4 py-2 rounded text-sm block w-full"
+        >
+          デバッグ情報
+        </button>
+
+        {/* 強制アニメーション表示ボタン（詳細版） */}
+        <button
+          onClick={() => {
+            console.log("テスト: 強制アニメーション表示（詳細版）");
+            const testCards: CardType[] = [
+              { suit: "hearts", rank: "A", id: "test-1" },
+              { suit: "spades", rank: "K", id: "test-2" },
+              { suit: "diamonds", rank: "Q", id: "test-3" },
+            ];
+            console.log("テストカード:", testCards);
+            setReceivedCards(testCards);
+            setShowExchangeAnimation(true);
+            setIsExchanging(false);
+          }}
+          className="bg-purple-500 text-white px-4 py-2 rounded text-sm block w-full"
+        >
+          強制アニメーション
+        </button>
+
+        {/* 現在のラウンド情報確認ボタン */}
+        <button
+          onClick={() => {
+            console.log("=== 現在のラウンド情報詳細 ===");
+            console.log("myPlayerId:", myPlayerId);
+            console.log("state?.currentRound:", state?.currentRound);
+            console.log("state?.rounds:", state?.rounds);
+
+            if (state?.rounds && state.currentRound !== undefined) {
+              const currentRound = state.rounds[state.currentRound];
+              console.log("currentRound:", currentRound);
+              console.log(
+                "currentRound.receivedCards:",
+                currentRound.receivedCards
+              );
+
+              if (myPlayerId && currentRound.receivedCards) {
+                console.log(
+                  "自分のreceivedCards:",
+                  currentRound.receivedCards[myPlayerId]
+                );
+                console.log(
+                  "receivedCardsのキー:",
+                  Object.keys(currentRound.receivedCards)
+                );
+              } else {
+                console.log("myPlayerIdまたはreceivedCardsが存在しません");
+              }
+            }
+
+            alert("ラウンド情報をコンソールに出力しました");
+          }}
+          className="bg-green-500 text-white px-4 py-2 rounded text-sm block w-full"
+        >
+          ラウンド情報確認
+        </button>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 
 export interface GameButtonProps {
   children: React.ReactNode;
@@ -56,7 +56,7 @@ const GameButton: React.FC<GameButtonProps> = ({
       {loading ? (
         <div className="flex items-center justify-center">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-          処琁E��...
+          処理中...
         </div>
       ) : (
         children

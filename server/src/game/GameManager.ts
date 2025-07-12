@@ -145,7 +145,10 @@ export class GameManager {
   }
 
   // カード交換の選択されたカードを各プレイヤーに3枚ずつ
-  exchangeCards(selectedCardsMap: Record<string, Card[]>) {
+  exchangeCards(selectedCardsMap: Record<string, Card[]>): {
+    success: boolean;
+    isComplete: boolean;
+  } {
     const round = this.getCurrentRound();
     if (!round) throw new Error("No active round");
 
@@ -176,7 +179,7 @@ export class GameManager {
     // 全員の交換が完了していない場合は待機
     if (round.exchangeCompleted.length < this.state.players.length) {
       console.log("全員の交換完了待機...");
-      return;
+      return { success: true, isComplete: false };
     }
 
     console.log("全員の交換完了が確定、実際の交換を実行");
@@ -274,6 +277,7 @@ export class GameManager {
     this.startTrick();
 
     console.log("=== カード交換処理終了 ===");
+    return { success: true, isComplete: true };
   }
 
   // トリック開始
@@ -338,7 +342,7 @@ export class GameManager {
   }
 
   // 現在のラウンドを取得
-  private getCurrentRound(): Round | undefined {
+  getCurrentRound(): Round | undefined {
     return this.state.rounds[this.state.currentRound];
   }
 

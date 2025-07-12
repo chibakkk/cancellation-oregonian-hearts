@@ -45,7 +45,7 @@ export const ConnectionStatus: React.FC = () => {
           onClick={reconnect}
           className="w-full bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded transition-colors"
         >
-          再接綁E
+          再接続
         </button>
       </div>
     </div>

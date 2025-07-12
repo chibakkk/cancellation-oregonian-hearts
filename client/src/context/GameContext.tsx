@@ -26,7 +26,11 @@ interface PlayCardData {
   card: Card;
 }
 
-type Callback = (res: { error?: string; myPlayerId?: string }) => void;
+type Callback = (res: {
+  error?: string;
+  myPlayerId?: string;
+  isComplete?: boolean;
+}) => void;
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -42,13 +46,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({
       const gameState = newState as GameState;
       console.log("フェーズ:", gameState.phase);
       console.log("現在のラウンド:", gameState.currentRound);
+      console.log("ラウンド数:", gameState.rounds.length);
+      console.log("現在のmyPlayerId:", myPlayerId);
+
       if (gameState.rounds[gameState.currentRound]) {
-        console.log(
-          "ラウンドのreceivedCards:",
-          gameState.rounds[gameState.currentRound].receivedCards
-        );
+        const currentRound = gameState.rounds[gameState.currentRound];
+        console.log("現在のラウンド詳細:", currentRound);
+        console.log("ラウンドのreceivedCards:", currentRound.receivedCards);
+        if (myPlayerId && currentRound.receivedCards) {
+          console.log(
+            "自分のreceivedCards:",
+            currentRound.receivedCards[myPlayerId]
+          );
+        } else {
+          console.log("myPlayerIdまたはreceivedCardsが存在しません");
+          console.log("myPlayerId:", myPlayerId);
+          console.log("receivedCards:", currentRound.receivedCards);
+        }
       }
+      console.log("状態更新前のstate:", state);
       setState(gameState);
+      console.log("状態更新完了");
     },
     onConnect: () => setConnectionStatus("接続完了"),
     onDisconnect: () => setConnectionStatus("接続切断"),

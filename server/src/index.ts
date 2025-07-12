@@ -68,7 +68,78 @@ io.on("connection", (socket) => {
   });
 
   // ルーム参加
-  socket.on("joinRoom", ({ roomId, playerName, password }, callback) => {});
+  socket.on("joinRoom", ({ roomId, playerName, password }, callback) => {
+    console.log("ルーム参加リクエスト", { roomId, playerName });
+
+    try {
+      const game = games[roomId];
+      if (!game) {
+        console.log("ルームが見つかりません:", roomId);
+        callback({ error: "ルームが見つかりません" });
+        return;
+      }
+
+      // パスワードチェック
+      if (game.state.password !== password) {
+        console.log("パスワードが一致しません:", roomId);
+        callback({ error: "パスワードが正しくありません" });
+        return;
+      }
+
+      // プレイヤー名の重複チェック
+      const existingPlayer = game.state.players.find(
+        (p) => p.name === playerName
+      );
+      if (existingPlayer) {
+        console.log("プレイヤー名が重複しています:", playerName);
+        callback({ error: "そのプレイヤー名は既に使用されています" });
+        return;
+      }
+
+      // 最大プレイヤー数チェック（10人まで）
+      if (game.state.players.length >= 10) {
+        console.log("ルームが満員です:", roomId);
+        callback({ error: "ルームが満員です" });
+        return;
+      }
+
+      // ゲームが既に開始されているかチェック
+      if (game.state.phase !== "waiting") {
+        console.log("ゲームが既に開始されています:", roomId);
+        callback({ error: "ゲームが既に開始されています" });
+        return;
+      }
+
+      // 新しいプレイヤーを追加
+      const newPlayerId = `P${game.state.players.length + 1}`;
+      const newPlayer = {
+        id: newPlayerId,
+        name: playerName,
+        hand: [],
+        tricks: [],
+        isHost: false,
+      };
+      game.state.players.push(newPlayer);
+
+      // ソケットをルームに参加させる
+      socket.join(roomId);
+
+      console.log("ルーム参加成功:", {
+        roomId,
+        playerName,
+        playerId: newPlayerId,
+      });
+      callback({
+        success: true,
+        state: game.getState(),
+        myPlayerId: newPlayerId,
+      });
+      io.to(roomId).emit("update", game.getState());
+    } catch (error) {
+      console.error("ルーム参加エラー:", error);
+      callback({ error: "ルーム参加中にエラーが発生しました" });
+    }
+  });
 
   // ゲーム開始
   socket.on("startGame", ({ roomId }, callback) => {
@@ -93,32 +164,52 @@ io.on("connection", (socket) => {
 
   // カード交換
   socket.on("exchangeCards", ({ roomId, selectedCardsMap }, callback) => {
-    console.log("カード交換リクエスト", {
-      roomId,
-      playerCount: Object.keys(selectedCardsMap).length,
-    });
+    console.log("=== カード交換リクエスト ===");
+    console.log("roomId:", roomId);
+    console.log("selectedCardsMap:", selectedCardsMap);
+    console.log("playerCount:", Object.keys(selectedCardsMap).length);
 
     try {
       const game = games[roomId];
       if (!game) {
+        console.log("ルームが見つかりません:", roomId);
         callback?.({ error: "ルームが見つかりません" });
         return;
       }
-      game.exchangeCards(selectedCardsMap);
-      console.log("カード交換成功", roomId);
 
-      // 状態更新送信前のチェック
-      const state = game.getState();
-      console.log("送信する状態のフェーズ:", state.phase);
-      if (state.rounds[state.currentRound]) {
-        console.log(
-          "送信するreceivedCards:",
-          state.rounds[state.currentRound].receivedCards
-        );
+      console.log("交換前の状態:");
+      console.log("フェーズ:", game.state.phase);
+      console.log("プレイヤー数:", game.state.players.length);
+      console.log("現在のラウンド:", game.state.currentRound);
+
+      const result = game.exchangeCards(selectedCardsMap);
+      console.log("カード交換結果:", result);
+
+      if (result.success) {
+        // 状態更新送信前のチェック
+        const state = game.getState();
+        console.log("交換後の状態:");
+        console.log("フェーズ:", state.phase);
+        console.log("現在のラウンド:", state.currentRound);
+        if (state.rounds[state.currentRound]) {
+          console.log(
+            "ラウンドのreceivedCards:",
+            state.rounds[state.currentRound].receivedCards
+          );
+        }
+
+        callback?.({
+          success: true,
+          state: state,
+          isComplete: result.isComplete,
+        });
+        console.log("クライアントに応答送信完了");
+        io.to(roomId).emit("update", state);
+        console.log("全クライアントに状態更新送信完了");
+      } else {
+        console.log("カード交換に失敗");
+        callback?.({ error: "カード交換に失敗しました" });
       }
-
-      callback?.({ success: true, state: state });
-      io.to(roomId).emit("update", state);
     } catch (error) {
       console.error("カード交換エラー:", error);
       callback?.({ error: "カード交換中にエラーが発生しました" });
