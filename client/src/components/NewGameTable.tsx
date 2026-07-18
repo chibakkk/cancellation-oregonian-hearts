@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlayingCardV2 } from "./PlayingCardV2";
 import { useGame } from "../context/useGame";
-import type { Card, CompletedTrickView, PlayerView, StoredResult } from "../types/coh";
+import type { Card, CompletedTrickView, PlayedCard, PlayerView, StoredResult, Trick } from "../types/coh";
 
 const SUIT_LABEL: Record<Card["suit"], string> = {
   hearts: "ハート",
@@ -11,6 +11,61 @@ const SUIT_LABEL: Record<Card["suit"], string> = {
   clubs: "クラブ",
   spades: "スペード",
 };
+
+const RANK_VALUE: Record<Card["rank"], number> = {
+  A: 14,
+  K: 13,
+  Q: 12,
+  J: 11,
+  "10": 10,
+  "9": 9,
+  "8": 8,
+  "7": 7,
+  "6": 6,
+  "5": 5,
+  "4": 4,
+  "3": 3,
+  "2": 2,
+};
+
+const TRICK_COLLECT_DELAY_MS = 2100;
+const TRICK_PREVIEW_CLEAR_DELAY_MS = 3400;
+
+function cardKey(card: Card): string {
+  return `${card.suit}:${card.rank}`;
+}
+
+function canceledCardKeys(cards: PlayedCard[], serverCanceledKeys: string[]): Set<string> {
+  const counts: Record<string, number> = {};
+  for (const played of cards) {
+    const key = cardKey(played.card);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return new Set([
+    ...serverCanceledKeys,
+    ...Object.entries(counts)
+      .filter(([, count]) => count > 1)
+      .map(([key]) => key),
+  ]);
+}
+
+function winningPlayedCard(trick?: Trick): PlayedCard | undefined {
+  if (!trick || trick.cards.length === 0) {
+    return undefined;
+  }
+  const canceled = canceledCardKeys(trick.cards, trick.canceledKeys);
+  const candidates = trick.leadSuit
+    ? trick.cards.filter(
+        (played) => played.card.suit === trick.leadSuit && !canceled.has(cardKey(played.card))
+      )
+    : [];
+  if (candidates.length === 0) {
+    return trick.cards.find((played) => played.playerId === trick.leaderId) ?? trick.cards[0];
+  }
+  return candidates.reduce((best, played) =>
+    RANK_VALUE[played.card.rank] > RANK_VALUE[best.card.rank] ? played : best
+  );
+}
 
 function playerRankings(players: PlayerView[]) {
   return [...players]
@@ -92,11 +147,15 @@ function PlayerSeat({
   player,
   active,
   me,
+  start,
+  leader,
   compact,
 }: {
   player: PlayerView;
   active: boolean;
   me: boolean;
+  start: boolean;
+  leader: boolean;
   compact?: boolean;
 }) {
   return (
@@ -113,11 +172,26 @@ function PlayerSeat({
         <span className={`truncate font-semibold text-slate-900 ${compact ? "max-w-16 text-sm" : ""}`}>
           {player.name}
         </span>
-        {player.isHost && (
-          <span className="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white">
-            HOST
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {start && (
+            <span
+              data-testid="start-player-badge"
+              className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white"
+            >
+              START
+            </span>
+          )}
+          {leader && (
+            <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              LEAD
+            </span>
+          )}
+          {player.isHost && (
+            <span className="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white">
+              HOST
+            </span>
+          )}
+        </div>
       </div>
       <div className={`${compact ? "gap-1 text-[11px]" : "gap-2 text-xs"} mt-1 grid grid-cols-2 text-slate-500`}>
         <span>獲得 {player.capturedCount}</span>
@@ -140,8 +214,13 @@ export default function NewGameTable() {
     data: CompletedTrickView;
     collecting: boolean;
   } | null>(null);
+  const [handHint, setHandHint] = useState<{
+    cardId: string;
+    message: string;
+  } | null>(null);
   const savedResultId = useRef<string | null>(null);
   const previewTimers = useRef<number[]>([]);
+  const handHintTimer = useRef<number | null>(null);
 
   const me = state?.players.find((player) => player.id === myPlayerId);
   const currentTurnId = state?.currentRound?.currentTurnPlayerId;
@@ -166,6 +245,14 @@ export default function NewGameTable() {
   }, [state?.roundNumber, state?.phase]);
 
   useEffect(() => {
+    return () => {
+      if (handHintTimer.current) {
+        window.clearTimeout(handHintTimer.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     for (const timer of previewTimers.current) {
       window.clearTimeout(timer);
     }
@@ -182,13 +269,13 @@ export default function NewGameTable() {
       previewTimers.current.push(
         window.setTimeout(() => {
           setCompletedTrickPreview({ data: completed, collecting: true });
-        }, 900)
+        }, TRICK_COLLECT_DELAY_MS)
       );
     }
     previewTimers.current.push(
       window.setTimeout(() => {
         setCompletedTrickPreview(null);
-      }, 1900)
+      }, TRICK_PREVIEW_CLEAR_DELAY_MS)
     );
 
     return () => {
@@ -248,6 +335,11 @@ export default function NewGameTable() {
   );
   const displayTrick = completedTrickPreview?.data.trick ?? state.currentRound?.currentTrick;
   const displayedTrickCards = displayTrick?.cards ?? [];
+  const startPlayer = state.players.find(
+    (player) => player.id === state.currentRound?.firstLeaderId
+  );
+  const leadPlayer = state.players.find((player) => player.id === displayTrick?.leaderId);
+  const currentTurnPlayer = state.players.find((player) => player.id === currentTurnId);
   const displayedWinner = completedTrickPreview?.data.trick.winnerId
     ? state.players.find((player) => player.id === completedTrickPreview.data.trick.winnerId)
     : undefined;
@@ -257,17 +349,70 @@ export default function NewGameTable() {
   const displayPhase = isPreviewingCompletedTrick ? "playing" : state.phase;
   const displayRoundNumber = completedTrickPreview?.data.roundNumber ?? state.roundNumber;
   const useMiniPlayedCards = tablePlayers.length >= 10;
+  const displayCanceledKeys = canceledCardKeys(
+    displayedTrickCards,
+    displayTrick?.canceledKeys ?? []
+  );
+  const winningPlayed = isPreviewingCompletedTrick
+    ? winningPlayedCard(displayTrick)
+    : undefined;
+
+  const showHandHint = (cardId: string, message: string) => {
+    if (handHintTimer.current) {
+      window.clearTimeout(handHintTimer.current);
+    }
+    setHandHint({ cardId, message });
+    handHintTimer.current = window.setTimeout(() => {
+      setHandHint(null);
+      handHintTimer.current = null;
+    }, 1600);
+  };
+
+  const unavailableReason = (card: Card): string => {
+    if (isPreviewingCompletedTrick) {
+      return "トリック確認中です。次の手番までお待ちください。";
+    }
+    if (state.phase === "passing") {
+      if (me.passedThisRound) {
+        return "カード交換は完了しています。";
+      }
+      return "交換するカードは3枚までです。";
+    }
+    if (state.phase !== "playing") {
+      return "今はカードを出せません。";
+    }
+    if (currentTurnId !== myPlayerId) {
+      return "今はあなたの手番ではありません。";
+    }
+
+    const leadSuit = displayTrick?.leadSuit;
+    const hasLeadSuit = leadSuit
+      ? state.myHand.some((handCard) => handCard.suit === leadSuit)
+      : false;
+    if (leadSuit && hasLeadSuit && card.suit !== leadSuit) {
+      return `マストフォローです。${SUIT_LABEL[leadSuit]}を出してください。`;
+    }
+    if (
+      !leadSuit &&
+      card.suit === "hearts" &&
+      state.currentRound?.heartsBroken === false &&
+      state.myHand.some((handCard) => handCard.suit !== "hearts")
+    ) {
+      return "ハートブレイク前はハートでリードできません。";
+    }
+    return "このカードは今は出せません。";
+  };
 
   const handlePassSelect = (cardId: string) => {
-    setSelectedPassIds((current) => {
-      if (current.includes(cardId)) {
-        return current.filter((id) => id !== cardId);
-      }
-      if (current.length >= 3) {
-        return current;
-      }
-      return [...current, cardId];
-    });
+    if (selectedPassIds.includes(cardId)) {
+      setSelectedPassIds((current) => current.filter((id) => id !== cardId));
+      return;
+    }
+    if (selectedPassIds.length >= 3) {
+      showHandHint(cardId, "交換するカードは3枚までです。");
+      return;
+    }
+    setSelectedPassIds((current) => [...current, cardId]);
   };
 
   const submitPass = () => {
@@ -311,13 +456,31 @@ export default function NewGameTable() {
             </div>
           </div>
 
-          <div className="absolute right-4 top-4 z-20 w-36 rounded-md bg-white/90 px-2.5 py-2 text-xs shadow-sm">
+          <div className="absolute right-4 top-4 z-20 w-44 rounded-md bg-white/90 px-2.5 py-2 text-xs shadow-sm">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
               Trick
             </div>
             <div className="mt-2 space-y-1 text-slate-700">
               <div className="flex justify-between gap-2">
-                <span>リード</span>
+                <span>開始</span>
+                <span className="max-w-24 truncate font-semibold">
+                  {startPlayer?.name ?? "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span>親</span>
+                <span className="max-w-24 truncate font-semibold">
+                  {leadPlayer?.name ?? "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span>手番</span>
+                <span className="max-w-24 truncate font-semibold">
+                  {isPreviewingCompletedTrick ? "-" : currentTurnPlayer?.name ?? "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span>スート</span>
                 <span className="font-semibold">
                   {displayTrick?.leadSuit
                     ? SUIT_LABEL[displayTrick.leadSuit]
@@ -353,6 +516,8 @@ export default function NewGameTable() {
                   player={player}
                   active={player.id === currentTurnId}
                   me={player.id === myPlayerId}
+                  start={player.id === state.currentRound?.firstLeaderId}
+                  leader={player.id === displayTrick?.leaderId}
                   compact={tablePlayers.length >= 7}
                 />
               </div>
@@ -421,21 +586,52 @@ export default function NewGameTable() {
                 positionIndex,
                 tablePlayers.length
               );
+              const isCanceled = displayCanceledKeys.has(cardKey(played.card));
+              const isOffLeadSuit = Boolean(
+                isPreviewingCompletedTrick &&
+                  displayTrick?.leadSuit &&
+                  played.card.suit !== displayTrick.leadSuit
+              );
+              const isWinningCard =
+                winningPlayed?.playerId === played.playerId &&
+                winningPlayed.card.id === played.card.id;
+              const dimmed = isCanceled || isOffLeadSuit;
+              const playedCardZIndex = completedTrickPreview?.collecting
+                ? isWinningCard
+                  ? 48
+                  : 28 + order
+                : isWinningCard
+                ? 42
+                : 25 + order;
 
               return (
                 <div
                   key={`${played.playerId}-${played.card.id}`}
                   data-testid="played-card"
                   data-player-id={played.playerId}
+                  data-canceled={isCanceled ? "true" : "false"}
+                  data-off-lead-suit={isOffLeadSuit ? "true" : "false"}
+                  data-winning-card={isWinningCard ? "true" : "false"}
                   className={`absolute z-[25] transition-[left,top,transform,opacity] duration-700 ease-in-out ${position.className} ${
                     completedTrickPreview?.collecting ? "opacity-80" : ""
                   }`}
-                  style={position.style}
+                  style={{ ...position.style, zIndex: playedCardZIndex }}
                 >
-                  <div className="relative flex flex-col items-center">
+                  <div
+                    className={`relative flex flex-col items-center rounded-md transition ${
+                      dimmed ? "opacity-45 grayscale saturate-50" : ""
+                    } ${
+                      isWinningCard
+                        ? "animate-pulse ring-4 ring-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.9)]"
+                        : ""
+                    }`}
+                  >
                     <span className="absolute -left-2 -top-2 z-30 flex h-6 w-6 items-center justify-center rounded-full border border-white bg-slate-950 text-xs font-bold text-white shadow-sm">
                       {order + 1}
                     </span>
+                    {isCanceled && (
+                      <span className="pointer-events-none absolute left-1/2 top-1/2 z-40 h-1 w-[140%] -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-rose-600/90 shadow-sm" />
+                    )}
                     <PlayingCardV2
                       card={played.card}
                       compact
@@ -484,6 +680,14 @@ export default function NewGameTable() {
             data-testid="hand-zone"
             className="absolute bottom-3 left-1/2 z-30 w-[min(100%,980px)] -translate-x-1/2 px-3"
           >
+            {handHint && (
+              <div
+                data-testid="hand-hint"
+                className="pointer-events-none absolute left-1/2 top-0 z-40 w-max max-w-[min(92vw,420px)] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-center text-sm font-semibold text-white shadow-lg"
+              >
+                {handHint.message}
+              </div>
+            )}
             <div className="overflow-x-auto rounded-md border border-white/50 bg-white/92 p-3 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
                 <span className="font-bold">
@@ -496,26 +700,40 @@ export default function NewGameTable() {
               <div className="flex min-h-32 gap-2">
                 {!isPreviewingPreviousRound &&
                   state.myHand.map((card) => {
-                  const selected = selectedPassIds.includes(card.id);
-                  const selectable =
-                    (state.phase === "passing" && !me.passedThisRound) ||
-                    (state.phase === "playing" && playableIds.has(card.id));
-                  return (
-                    <PlayingCardV2
-                      key={card.id}
-                      card={card}
-                      selected={selected}
-                      playable={selectable}
-                      onClick={
-                        state.phase === "passing" && !me.passedThisRound
-                          ? () => handlePassSelect(card.id)
-                          : state.phase === "playing" && playableIds.has(card.id)
-                          ? () => submitPlay(card.id)
-                          : undefined
-                      }
-                    />
-                  );
-                })}
+                    const selected = selectedPassIds.includes(card.id);
+                    const canSelectForPassing =
+                      state.phase === "passing" && !me.passedThisRound;
+                    const canPlayCard =
+                      state.phase === "playing" &&
+                      !isPreviewingCompletedTrick &&
+                      playableIds.has(card.id);
+                    const canShowUnavailableReason =
+                      (state.phase === "playing" || state.phase === "passing") &&
+                      !canPlayCard &&
+                      !canSelectForPassing;
+                    const unavailable =
+                      canShowUnavailableReason ||
+                      (state.phase === "playing" && !canPlayCard);
+
+                    return (
+                      <PlayingCardV2
+                        key={card.id}
+                        card={card}
+                        selected={selected}
+                        playable={canSelectForPassing || canPlayCard}
+                        unavailable={unavailable}
+                        onClick={
+                          canSelectForPassing
+                            ? () => handlePassSelect(card.id)
+                            : canPlayCard
+                            ? () => submitPlay(card.id)
+                            : canShowUnavailableReason || state.phase === "playing"
+                            ? () => showHandHint(card.id, unavailableReason(card))
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
               </div>
             </div>
           </div>

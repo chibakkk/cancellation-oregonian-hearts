@@ -98,6 +98,7 @@ interface PlayingCardV2Props {
   compact?: boolean;
   mini?: boolean;
   simple?: boolean;
+  unavailable?: boolean;
   onClick?: () => void;
 }
 
@@ -155,6 +156,7 @@ export function PlayingCardV2({
   compact = false,
   mini = false,
   simple = false,
+  unavailable = false,
   onClick,
 }: PlayingCardV2Props) {
   const size = mini ? "h-[72px] w-[50px]" : compact ? "h-24 w-16" : "h-32 w-24";
@@ -187,6 +189,7 @@ export function PlayingCardV2({
   const count = pipCount(card.rank);
   const pipText = pipTextClass(count, compact, mini);
   const pipBox = pipBoxClass(count, compact, mini);
+  const interactive = Boolean(onClick);
 
   return (
     <button
@@ -194,15 +197,24 @@ export function PlayingCardV2({
       data-testid="playing-card"
       data-card-id={card.id}
       data-playable={playable ? "true" : "false"}
+      aria-disabled={unavailable || !interactive}
       onClick={onClick}
-      disabled={!onClick}
+      disabled={!interactive}
       className={`${size} ${cardPadding} relative shrink-0 rounded-md border bg-white text-left shadow-sm transition ${
         selected ? "-translate-y-3 border-sky-500 ring-2 ring-sky-300" : ""
       } ${
         playable
-          ? "border-slate-300 hover:-translate-y-2 hover:shadow-md"
+          ? "-translate-y-2 border-sky-400 ring-2 ring-sky-200 hover:-translate-y-3 hover:shadow-md"
           : "border-slate-200"
-      } ${onClick ? "cursor-pointer" : "cursor-default"}`}
+      } ${
+        unavailable ? "opacity-45 grayscale saturate-50 hover:opacity-75" : ""
+      } ${
+        interactive
+          ? unavailable
+            ? "cursor-not-allowed"
+            : "cursor-pointer"
+          : "cursor-default"
+      }`}
     >
       {!simple && (
         <div

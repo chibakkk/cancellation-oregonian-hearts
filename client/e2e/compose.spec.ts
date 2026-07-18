@@ -19,7 +19,7 @@ function trackPageErrors(page: Page): string[] {
 async function createRoom(page: Page, playerName: string): Promise<string> {
   await page.goto("/");
   await page.getByTestId("player-name-input").fill(playerName);
-  await page.getByTestId("password-input").fill("1234");
+  await page.getByTestId("create-password-input").fill("1234");
   await expect(page.getByTestId("create-room-button")).toBeEnabled();
   await page.getByTestId("create-room-button").click();
   await expect(page).toHaveURL(/\/game$/);
@@ -34,8 +34,8 @@ async function createRoom(page: Page, playerName: string): Promise<string> {
 async function joinRoom(page: Page, roomId: string, playerName: string): Promise<void> {
   await page.goto("/");
   await page.getByTestId("player-name-input").fill(playerName);
-  await page.getByTestId("password-input").fill("1234");
   await page.getByTestId("room-id-input").fill(roomId);
+  await page.getByTestId("join-password-input").fill("1234");
   await expect(page.getByTestId("join-room-button")).toBeEnabled();
   await page.getByTestId("join-room-button").click();
   await expect(page).toHaveURL(/\/game$/);

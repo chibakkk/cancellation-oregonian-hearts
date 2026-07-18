@@ -4,6 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { useGame } from "../context/useGame";
 import type { StoredResult } from "../types/coh";
 
+const SESSION_STORAGE_KEY = "coh:session";
+
+type StoredSessionSummary = {
+  roomId: string;
+};
+
 function createRoomId(): string {
   return Math.random().toString(36).slice(2, 7).toUpperCase();
 }
@@ -16,17 +22,32 @@ function loadResults(): StoredResult[] {
   }
 }
 
+function loadStoredSession(): StoredSessionSummary | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<StoredSessionSummary>;
+    return parsed.roomId ? { roomId: parsed.roomId } : null;
+  } catch {
+    return null;
+  }
+}
+
 export function NewHome() {
   const navigate = useNavigate();
   const { createRoom, joinRoom, isConnected, connectionStatus } = useGame();
   const [playerName, setPlayerName] = useState("");
-  const [password, setPassword] = useState("");
+  const [createPassword, setCreatePassword] = useState("");
+  const [joinPassword, setJoinPassword] = useState("");
   const [roomId, setRoomId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"create" | "join" | null>(null);
   const results = useMemo(loadResults, []);
+  const storedSession = useMemo(loadStoredSession, []);
 
-  const validateCommon = () => {
+  const validateCommon = (password: string) => {
     if (!playerName.trim()) {
       return "プレイヤー名を入力してください";
     }
@@ -38,7 +59,7 @@ export function NewHome() {
 
   const handleCreate = (event: SyntheticEvent) => {
     event.preventDefault();
-    const validation = validateCommon();
+    const validation = validateCommon(createPassword);
     if (validation) {
       setError(validation);
       return;
@@ -48,7 +69,7 @@ export function NewHome() {
     setBusy("create");
     setError(null);
     createRoom(
-      { roomId: nextRoomId, password, playerName: playerName.trim() },
+      { roomId: nextRoomId, password: createPassword, playerName: playerName.trim() },
       (response) => {
         setBusy(null);
         if (response.error) {
@@ -62,7 +83,7 @@ export function NewHome() {
 
   const handleJoin = (event: SyntheticEvent) => {
     event.preventDefault();
-    const validation = validateCommon();
+    const validation = validateCommon(joinPassword);
     if (validation) {
       setError(validation);
       return;
@@ -75,7 +96,7 @@ export function NewHome() {
     setBusy("join");
     setError(null);
     joinRoom(
-      { roomId, password, playerName: playerName.trim() },
+      { roomId, password: joinPassword, playerName: playerName.trim() },
       (response) => {
         setBusy(null);
         if (response.error) {
@@ -120,12 +141,35 @@ export function NewHome() {
         </section>
 
         <section className="rounded-md border border-white/60 bg-white/86 p-5 shadow-sm backdrop-blur">
-          <div className="mb-5 flex items-center justify-between">
+          <div className="mb-5 flex items-center justify-between gap-3">
             <h2 className="text-xl font-bold">ルーム</h2>
-            <span className="text-sm text-slate-500">
-              {connectionStatus}
-            </span>
+            <span className="text-sm text-slate-500">{connectionStatus}</span>
           </div>
+
+          {storedSession && (
+            <section className="mb-4 rounded-md border border-sky-200 bg-sky-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-bold text-sky-950">前回のルーム</div>
+                  <div className="mt-0.5 font-mono text-sm text-sky-800">
+                    {storedSession.roomId}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  data-testid="resume-session-button"
+                  className="shrink-0 rounded-md bg-sky-900 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                  disabled={!isConnected}
+                  onClick={() => navigate("/game")}
+                >
+                  戻る
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-sky-800">
+                同じ端末なら、ブラウザを閉じてもここから復帰できます。
+              </p>
+            </section>
+          )}
 
           {error && (
             <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -133,47 +177,51 @@ export function NewHome() {
             </div>
           )}
 
-          <form className="space-y-4">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-600">名前</span>
-              <input
-                data-testid="player-name-input"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-sky-500"
-                value={playerName}
-                maxLength={20}
-                onChange={(event) => setPlayerName(event.target.value)}
-                placeholder="プレイヤー名"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-slate-600">
-                4桁パスワード
-              </span>
-              <input
-                data-testid="password-input"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono tracking-[0.3em] outline-none focus:border-sky-500"
-                value={password}
-                maxLength={4}
-                inputMode="numeric"
-                onChange={(event) => setPassword(event.target.value.replace(/\D/g, ""))}
-                placeholder="0000"
-              />
-            </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-600">プレイヤー名</span>
+            <input
+              data-testid="player-name-input"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-sky-500"
+              value={playerName}
+              maxLength={20}
+              onChange={(event) => setPlayerName(event.target.value)}
+              placeholder="プレイヤー名"
+            />
+          </label>
 
-            <button
-              data-testid="create-room-button"
-              className="w-full rounded-md bg-slate-950 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
-              disabled={!isConnected || busy === "create"}
-              onClick={handleCreate}
-            >
-              {busy === "create" ? "作成中..." : "新しいルームを作成"}
-            </button>
-
-            <div className="border-t border-slate-200 pt-4">
-              <label className="block">
+          <div className="mt-4 grid gap-4">
+            <form className="rounded-md border border-slate-200 bg-white p-4" onSubmit={handleCreate}>
+              <h3 className="font-bold text-slate-950">新規ルーム作成</h3>
+              <label className="mt-3 block">
                 <span className="text-sm font-medium text-slate-600">
-                  参加するルームID
+                  ルームの4桁パスワード
                 </span>
+                <input
+                  data-testid="create-password-input"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono tracking-[0.3em] outline-none focus:border-sky-500"
+                  value={createPassword}
+                  maxLength={4}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setCreatePassword(event.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="0000"
+                />
+              </label>
+              <button
+                type="submit"
+                data-testid="create-room-button"
+                className="mt-3 w-full rounded-md bg-slate-950 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+                disabled={!isConnected || busy === "create"}
+              >
+                {busy === "create" ? "作成中..." : "新しいルームを作成"}
+              </button>
+            </form>
+
+            <form className="rounded-md border border-slate-200 bg-white p-4" onSubmit={handleJoin}>
+              <h3 className="font-bold text-slate-950">ルーム参加</h3>
+              <label className="mt-3 block">
+                <span className="text-sm font-medium text-slate-600">ルームID</span>
                 <input
                   data-testid="room-id-input"
                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono uppercase tracking-[0.2em] outline-none focus:border-sky-500"
@@ -185,16 +233,32 @@ export function NewHome() {
                   placeholder="ABCDE"
                 />
               </label>
+              <label className="mt-3 block">
+                <span className="text-sm font-medium text-slate-600">
+                  ルームの4桁パスワード
+                </span>
+                <input
+                  data-testid="join-password-input"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono tracking-[0.3em] outline-none focus:border-sky-500"
+                  value={joinPassword}
+                  maxLength={4}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setJoinPassword(event.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="0000"
+                />
+              </label>
               <button
+                type="submit"
                 data-testid="join-room-button"
                 className="mt-3 w-full rounded-md border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-900 disabled:cursor-not-allowed disabled:text-slate-400"
                 disabled={!isConnected || busy === "join"}
-                onClick={handleJoin}
               >
                 {busy === "join" ? "参加中..." : "ルームに参加"}
               </button>
-            </div>
-          </form>
+            </form>
+          </div>
 
           <div className="mt-6 border-t border-slate-200 pt-4">
             <h3 className="text-sm font-bold text-slate-700">直近の戦績</h3>

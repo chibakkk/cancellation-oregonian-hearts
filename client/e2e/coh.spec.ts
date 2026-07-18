@@ -26,7 +26,7 @@ function trackPageErrors(page: Page): string[] {
 async function createRoom(page: Page, playerName: string): Promise<string> {
   await page.goto("/");
   await page.getByTestId("player-name-input").fill(playerName);
-  await page.getByTestId("password-input").fill("1234");
+  await page.getByTestId("create-password-input").fill("1234");
   await expect(page.getByTestId("create-room-button")).toBeEnabled();
   await page.getByTestId("create-room-button").click();
   await expect(page).toHaveURL(/\/game$/);
@@ -41,8 +41,8 @@ async function createRoom(page: Page, playerName: string): Promise<string> {
 async function joinRoom(page: Page, roomId: string, playerName: string): Promise<void> {
   await page.goto("/");
   await page.getByTestId("player-name-input").fill(playerName);
-  await page.getByTestId("password-input").fill("1234");
   await page.getByTestId("room-id-input").fill(roomId);
+  await page.getByTestId("join-password-input").fill("1234");
   await expect(page.getByTestId("join-room-button")).toBeEnabled();
   await page.getByTestId("join-room-button").click();
   await expect(page).toHaveURL(/\/game$/);
@@ -367,8 +367,8 @@ test("home displays readable server errors for failed joins", async ({ browser }
   try {
     await guest.page.goto("/");
     await guest.page.getByTestId("player-name-input").fill("MissingRoomGuest");
-    await guest.page.getByTestId("password-input").fill("1234");
     await guest.page.getByTestId("room-id-input").fill("ZZ999");
+    await guest.page.getByTestId("join-password-input").fill("1234");
     await guest.page.getByTestId("join-room-button").click();
     await expect(guest.page.locator("body")).toContainText("ルームが見つかりません");
 
@@ -376,15 +376,15 @@ test("home displays readable server errors for failed joins", async ({ browser }
 
     await guest.page.goto("/");
     await guest.page.getByTestId("player-name-input").fill("WrongPasswordGuest");
-    await guest.page.getByTestId("password-input").fill("9999");
     await guest.page.getByTestId("room-id-input").fill(roomId);
+    await guest.page.getByTestId("join-password-input").fill("9999");
     await guest.page.getByTestId("join-room-button").click();
     await expect(guest.page.locator("body")).toContainText("パスワードが正しくありません");
 
     await guest.page.goto("/");
     await guest.page.getByTestId("player-name-input").fill(host.name);
-    await guest.page.getByTestId("password-input").fill("1234");
     await guest.page.getByTestId("room-id-input").fill(roomId);
+    await guest.page.getByTestId("join-password-input").fill("1234");
     await guest.page.getByTestId("join-room-button").click();
     await expect(guest.page.locator("body")).toContainText(
       "同じ名前のプレイヤーが既に参加しています"
@@ -398,8 +398,8 @@ test("home displays readable server errors for failed joins", async ({ browser }
 
     await lateGuest.page.goto("/");
     await lateGuest.page.getByTestId("player-name-input").fill(lateGuest.name);
-    await lateGuest.page.getByTestId("password-input").fill("1234");
     await lateGuest.page.getByTestId("room-id-input").fill(roomId);
+    await lateGuest.page.getByTestId("join-password-input").fill("1234");
     await lateGuest.page.getByTestId("join-room-button").click();
     await expect(lateGuest.page.locator("body")).toContainText(
       "ゲーム開始後は参加できません"
@@ -503,6 +503,7 @@ test("four players can complete round 1 and enter round 2", async ({ browser }) 
 test("four players can reload during play, restore session, and complete round 1", async ({
   browser,
 }) => {
+  test.slow();
   const { host, players, roomId, errorBuckets } = await setupStartedRoom(
     browser,
     4,
@@ -559,6 +560,7 @@ test("four players can reload during play, restore session, and complete round 1
 test("four players can reopen a closed tab, restore session, and complete round 1", async ({
   browser,
 }) => {
+  test.slow();
   const { host, players, roomId, errorBuckets } = await setupStartedRoom(
     browser,
     4,
@@ -619,6 +621,7 @@ test("four players can reopen a closed tab, restore session, and complete round 
 test("four players can reload during trick completion preview and complete round 1", async ({
   browser,
 }) => {
+  test.slow();
   const { host, players, roomId, errorBuckets } = await setupStartedRoom(
     browser,
     4,

@@ -3,8 +3,8 @@ import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const serverPort = 3101;
-const clientPort = 5174;
+const serverPort = Number(process.env.COH_E2E_SERVER_PORT ?? 3101);
+const clientPort = Number(process.env.COH_E2E_CLIENT_PORT ?? 5174);
 const serverUrl = `http://127.0.0.1:${serverPort}`;
 const clientUrl = `http://127.0.0.1:${clientPort}`;
 const configDir = path.dirname(fileURLToPath(import.meta.url));
