@@ -22,5 +22,12 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/context/GameContext.tsx",
+    "src/hooks/useSocket.ts",
+    "src/components/ConnectionStatus.tsx",
+    "src/pages/Home.tsx",
+    "src/components/GameTable.tsx"
+  ]
 }

@@ -86,7 +86,11 @@ const Home: React.FC = () => {
   };
 
   const handleStartGame = () => {
-    startGame({ roomId }, (res) => {
+    if (!state?.roomId) {
+      setError("ルームIDが見つかりません");
+      return;
+    }
+    startGame({ roomId: state.roomId }, (res) => {
       if (res?.error) {
         setError(res.error);
       }
@@ -258,21 +262,23 @@ const Home: React.FC = () => {
               </div>
             </div>
 
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                <span className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></span>
-                ゲームを開始{" "}
-              </h3>
-              <GameButton
-                onClick={handleStartGame}
-                disabled={!state || state.players.length < 4}
-                loading={!state || state.players.length < 4}
-                variant="primary"
-                className="w-full"
-              >
-                ゲームを開始{" "}
-              </GameButton>
-            </div>
+            {state && state.players.length >= 4 && (
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                  <span className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></span>
+                  ゲームを開始{" "}
+                </h3>
+                <GameButton
+                  onClick={handleStartGame}
+                  disabled={false}
+                  loading={false}
+                  variant="primary"
+                  className="w-full"
+                >
+                  ゲームを開始{" "}
+                </GameButton>
+              </div>
+            )}
           </div>
 
           <div className="mt-8 text-center text-sm text-gray-600 bg-gray-50 rounded-xl p-4">

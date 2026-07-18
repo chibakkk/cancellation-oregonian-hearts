@@ -15,6 +15,9 @@ export function useSocket(options?: UseSocketOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const isConnectingRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 5;
+  const reconnectDelayRef = useRef(1000);
 
   const connect = useCallback(() => {
     if (isConnectingRef.current || socketRef.current?.connected) {
@@ -28,7 +31,7 @@ export function useSocket(options?: UseSocketOptions) {
 
       const socket = io(SERVER_URL, {
         timeout: 10000,
-        reconnection: false, // 自動再接続を無効化
+        reconnection: false, // 自動再接続を無効化（手動で制御）
         forceNew: false, // 既存の接続を再利用
       });
 
@@ -39,6 +42,8 @@ export function useSocket(options?: UseSocketOptions) {
         setIsConnected(true);
         setConnectionError(null);
         isConnectingRef.current = false;
+        reconnectAttemptsRef.current = 0; // 接続成功時にリセット
+        reconnectDelayRef.current = 1000; // 遅延時間をリセット
         options?.onConnect?.();
       });
 
@@ -46,9 +51,29 @@ export function useSocket(options?: UseSocketOptions) {
         console.error("Socket接続エラー:", error);
         setIsConnected(false);
         isConnectingRef.current = false;
+
         const errorMessage = `接続エラー: ${error.message}`;
         setConnectionError(errorMessage);
         options?.onError?.(errorMessage);
+
+        // 自動再接続の試行
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          console.log(
+            `再接続試行 ${
+              reconnectAttemptsRef.current + 1
+            }/${maxReconnectAttempts}`
+          );
+          setTimeout(() => {
+            reconnectAttemptsRef.current++;
+            reconnectDelayRef.current = Math.min(
+              reconnectDelayRef.current * 2,
+              10000
+            ); // 指数バックオフ
+            connect();
+          }, reconnectDelayRef.current);
+        } else {
+          setConnectionError("接続に失敗しました。手動で再接続してください。");
+        }
       });
 
       socket.on("disconnect", (reason: string) => {
@@ -67,6 +92,22 @@ export function useSocket(options?: UseSocketOptions) {
 
         setConnectionError(errorMessage);
         options?.onDisconnect?.();
+
+        // 意図的な切断でない場合は自動再接続
+        if (
+          reason !== "io client disconnect" &&
+          reconnectAttemptsRef.current < maxReconnectAttempts
+        ) {
+          console.log(
+            `切断後の再接続試行 ${
+              reconnectAttemptsRef.current + 1
+            }/${maxReconnectAttempts}`
+          );
+          setTimeout(() => {
+            reconnectAttemptsRef.current++;
+            connect();
+          }, reconnectDelayRef.current);
+        }
       });
 
       // サーバーからの状態更新
@@ -202,6 +243,26 @@ export function useSocket(options?: UseSocketOptions) {
     [emitWithConnectionCheck]
   );
 
+  const forceFinishRound = useCallback(
+    (
+      data: { roomId: string },
+      callback?: (res: { error?: string; myPlayerId?: string }) => void
+    ) => {
+      emitWithConnectionCheck("debug:force-finish-round", data, callback);
+    },
+    [emitWithConnectionCheck]
+  );
+
+  const restartGame = useCallback(
+    (
+      data: { roomId: string },
+      callback?: (res: { error?: string; myPlayerId?: string }) => void
+    ) => {
+      emitWithConnectionCheck("restartGame", data, callback);
+    },
+    [emitWithConnectionCheck]
+  );
+
   const getState = useCallback(
     (
       data: { roomId: string },
@@ -224,5 +285,7 @@ export function useSocket(options?: UseSocketOptions) {
     exchangeCards,
     playCard,
     getState,
+    forceFinishRound,
+    restartGame,
   };
 }

@@ -267,6 +267,57 @@ io.on("connection", (socket) => {
     }
   });
 
+  // 強制ラウンド終了（デバッグ用）
+  socket.on("debug:force-finish-round", ({ roomId }, callback) => {
+    console.log(`[デバッグ] 強制ラウンド終了リクエスト: ${roomId}`);
+    try {
+      const game = games[roomId];
+      if (!game) {
+        callback?.({ error: "ルームが見つかりません" });
+        return;
+      }
+      // 現在のラウンドを強制的に終了させる
+      game.finishRound();
+      console.log(`[デバッグ] 強制ラウンド終了成功: ${roomId}`);
+      callback?.({ success: true, state: game.getState() });
+      io.to(roomId).emit("update", game.getState());
+    } catch (e) {
+      console.error("[デバッグ] 強制ラウンド終了エラー:", e);
+      if (e instanceof Error) {
+        callback?.({ error: e.message });
+      } else {
+        callback?.({ error: String(e) });
+      }
+    }
+  });
+
+  // 新しいゲーム開始
+  socket.on("restartGame", ({ roomId }, callback) => {
+    console.log("新しいゲーム開始リクエスト", roomId);
+    try {
+      const game = games[roomId];
+      if (!game) {
+        callback?.({ error: "ルームが見つかりません" });
+        return;
+      }
+
+      // プレイヤー名を保持して新しいゲームを作成
+      const playerNames = game.state.players.map((p) => p.name);
+      const password = game.state.password;
+
+      // 新しいGameManagerインスタンスを作成
+      const newGame = new GameManager(roomId, password, playerNames);
+      games[roomId] = newGame;
+
+      console.log("新しいゲーム開始成功", roomId);
+      callback?.({ success: true, state: newGame.getState() });
+      io.to(roomId).emit("update", newGame.getState());
+    } catch (error) {
+      console.error("新しいゲーム開始エラー:", error);
+      callback?.({ error: "新しいゲーム開始中にエラーが発生しました" });
+    }
+  });
+
   // 状態同期リクエスト
   socket.on("getState", ({ roomId }, callback) => {
     console.log("状態取得リクエスト", roomId);

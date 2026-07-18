@@ -1,0 +1,10 @@
+services:
+  server:
+    build:
+      args:
+        NPM_CONFIG_STRICT_SSL: "false"
+
+  client:
+    build:
+      args:
+        NPM_CONFIG_STRICT_SSL: "false"

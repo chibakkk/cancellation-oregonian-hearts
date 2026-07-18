@@ -1,22 +1,22 @@
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
-import { ConnectionStatus } from "./components/ConnectionStatus";
-import GameTable from "./components/GameTable";
-import { GameProvider } from "./context/GameContext";
-import Home from "./pages/Home";
+import { ConnectionBadge } from "./components/ConnectionBadge";
+import NewGameTable from "./components/NewGameTable";
+import { GameProvider } from "./context/GameProvider";
+import { NewHome } from "./pages/NewHome";
 
 function App() {
   return (
     <GameProvider>
       <Router>
-        <ConnectionStatus />
+        <ConnectionBadge />
         <Routes>
           <Route
             path="/"
-            element={<Home />}
+            element={<NewHome />}
           />
           <Route
             path="/game"
-            element={<GameTable />}
+            element={<NewGameTable />}
           />
         </Routes>
       </Router>

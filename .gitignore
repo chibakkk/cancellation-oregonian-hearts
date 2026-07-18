@@ -1,0 +1,13 @@
+# Local screenshots and inspection artifacts
+/ten-player-playing.png
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+
+# Local environment files
+.env
+.env.*
+!.env.example

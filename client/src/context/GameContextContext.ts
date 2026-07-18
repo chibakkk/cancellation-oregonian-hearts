@@ -1,5 +1,6 @@
-﻿import { createContext } from "react";
-import type { Card, GameState } from "../types/game";
+import { createContext } from "react";
+import type { ConnectionPhase } from "../hooks/useCohSocket";
+import type { GameView } from "../types/coh";
 
 interface CreateRoomData {
   roomId: string;
@@ -12,36 +13,39 @@ interface JoinRoomData {
   password: string;
 }
 interface StartGameData {
-  roomId: string;
+  roomId?: string;
 }
-interface ExchangeCardsData {
-  roomId: string;
-  selectedCardsMap: Record<string, Card[]>;
+interface PassCardsData {
+  cardIds: string[];
 }
 interface PlayCardData {
-  roomId: string;
-  playerId: string;
-  card: Card;
+  cardId: string;
 }
 
 type Callback = (res: {
+  success?: boolean;
   error?: string;
   myPlayerId?: string;
-  isComplete?: boolean;
+  sessionToken?: string;
+  state?: GameView;
 }) => void;
 
 interface GameContextProps {
-  state: GameState | null;
+  state: GameView | null;
   myPlayerId: string | null;
   connectionStatus: string;
+  connectionPhase: ConnectionPhase;
   isConnected: boolean;
   connectionError: string | null;
+  reconnectAttempt: number;
   reconnect: () => void;
   createRoom: (data: CreateRoomData, cb?: Callback) => void;
   joinRoom: (data: JoinRoomData, cb?: Callback) => void;
   startGame: (data: StartGameData, cb?: Callback) => void;
-  exchangeCards: (data: ExchangeCardsData, cb?: Callback) => void;
+  passCards: (data: PassCardsData, cb?: Callback) => void;
   playCard: (data: PlayCardData, cb?: Callback) => void;
+  restartGame: (data?: { roomId?: string }, cb?: Callback) => void;
+  resetGame: () => void;
 }
 
 export const GameContext = createContext<GameContextProps | undefined>(

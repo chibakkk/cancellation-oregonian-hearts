@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type SimpleBarCore from "simplebar";
 import SimpleBar from "simplebar-react";
 import "simplebar-react/dist/simplebar.min.css";
@@ -8,7 +9,10 @@ import Card from "./Card";
 
 const GameTable: React.FC = () => {
   const gameContext = useContext(GameContext);
-  const { state, playCard, myPlayerId } = gameContext || {};
+  const navigate = useNavigate();
+  const { state, playCard, myPlayerId, stateValidationError } =
+    gameContext || {};
+  const [showGameDetails, setShowGameDetails] = useState(false);
   const myPlayer =
     state && myPlayerId
       ? state.players?.find((p) => p.id === myPlayerId)
@@ -20,10 +24,14 @@ const GameTable: React.FC = () => {
   const [isExchanging, setIsExchanging] = useState(false);
   const [showExchangeAnimation, setShowExchangeAnimation] = useState(false);
   const [receivedCards, setReceivedCards] = useState<CardType[]>([]);
+  const [shownAnimationForRound, setShownAnimationForRound] = useState<
+    number | null
+  >(null);
   const [showLeadNotice, setShowLeadNotice] = useState(false);
   const prevIsMyTurn = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const simpleBarRef = useRef<SimpleBarCore | null>(null);
+  const animationTimerRef = useRef<number | null>(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
   const scrollStartX = useRef(0);
@@ -86,6 +94,11 @@ const GameTable: React.FC = () => {
       errorMessage = `プレイヤーが見つかりません: ${myPlayerId}`;
     } else if (!myPlayer.hand || !Array.isArray(myPlayer.hand)) {
       errorMessage = "手札データが不正です";
+    }
+
+    // 状態検証エラーの優先表示
+    if (stateValidationError) {
+      errorMessage = `ゲーム状態エラー: ${stateValidationError}`;
     }
   } catch (error) {
     console.error("レンダリングエラー:", error);
@@ -162,53 +175,60 @@ const GameTable: React.FC = () => {
       // 交換フェーズに戻った場合は状態をリセット
       setShowExchangeAnimation(false);
       setReceivedCards([]);
+      setShownAnimationForRound(null);
     }
   }, [state?.phase, showExchangeAnimation, isExchanging]);
 
-  // 交換完了時のアニメーション表示（シンプル版）
+  // 交換完了時のアニメーション表示
   useEffect(() => {
-    console.log("=== アニメーション表示チェック（シンプル版） ===");
-    console.log("state?.phase:", state?.phase);
-    console.log("myPlayerId:", myPlayerId);
-    console.log("state?.rounds:", state?.rounds);
-    console.log("state?.currentRound:", state?.currentRound);
+    console.log("=== アニメーション表示チェック ===");
 
-    // プレイフェーズで、かつアニメーション未表示の場合のみチェック
+    // プレイフェーズで、必要な情報が揃っているかチェック
     if (
       state?.phase === "playing" &&
       myPlayerId &&
       state.rounds &&
-      state.currentRound !== undefined &&
-      !showExchangeAnimation
+      state?.currentRound !== undefined
     ) {
-      const currentRound = state.rounds[state.currentRound];
-      console.log("currentRound:", currentRound);
-      console.log("currentRound?.receivedCards:", currentRound?.receivedCards);
+      const currentRoundNumber = state.currentRound;
+      const currentRound = state.rounds[currentRoundNumber];
 
-      // 受け取ったカードがある場合
-      if (
-        currentRound?.receivedCards?.[myPlayerId] &&
-        currentRound.receivedCards[myPlayerId].length > 0
-      ) {
-        console.log("受け取ったカードを発見！アニメーション表示開始");
-        console.log("カード:", currentRound.receivedCards[myPlayerId]);
+      // このラウンドのアニメーションをまだ表示していないかチェック
+      if (shownAnimationForRound !== currentRoundNumber) {
+        // 受け取ったカードがある場合
+        if (
+          currentRound?.receivedCards?.[myPlayerId] &&
+          currentRound.receivedCards[myPlayerId].length > 0
+        ) {
+          console.log(
+            `ラウンド${currentRoundNumber}のカード交換アニメーションを開始します。`
+          );
 
-        // アニメーション表示
-        setReceivedCards(currentRound.receivedCards[myPlayerId]);
-        setShowExchangeAnimation(true);
-        setIsExchanging(false);
+          // 表示したラウンド番号を記録
+          setShownAnimationForRound(currentRoundNumber);
 
-        // 5秒後にアニメーション終了
-        const timer = setTimeout(() => {
-          console.log("アニメーション終了");
-          setShowExchangeAnimation(false);
-          setReceivedCards([]);
-        }, 5000);
+          // アニメーション表示
+          setReceivedCards(currentRound.receivedCards[myPlayerId]);
+          setShowExchangeAnimation(true);
+          setIsExchanging(false); // isExchangingも確実にfalseに
 
-        return () => {
-          console.log("アニメーションクリーンアップ");
-          clearTimeout(timer);
-        };
+          // 5秒後にアニメーション終了
+          animationTimerRef.current = setTimeout(() => {
+            console.log("アニメーションがタイマーで終了しました。");
+            setShowExchangeAnimation(false);
+            setReceivedCards([]); // カード情報もクリア
+            animationTimerRef.current = null;
+          }, 5000);
+
+          return () => {
+            console.log(
+              "アニメーション表示のuseEffectがクリーンアップされました。"
+            );
+            if (animationTimerRef.current) {
+              clearTimeout(animationTimerRef.current);
+            }
+          };
+        }
       }
     }
   }, [
@@ -216,7 +236,7 @@ const GameTable: React.FC = () => {
     myPlayerId,
     state?.rounds,
     state?.currentRound,
-    showExchangeAnimation,
+    shownAnimationForRound,
   ]);
 
   // ターン通知の表示制御
@@ -529,196 +549,234 @@ const GameTable: React.FC = () => {
         </div>
       )}
 
-      {/* プレイヤー配置・獲得トリック枚数 */}
-      {sortedPlayers.map((player, idx) => {
-        const isMe = player.id === myPlayerId;
-        let position;
-        if (sortedPlayers.length === 2) {
-          // 2人の場合、自分が下、相手が上
-          position =
-            idx === 0 ? { x: "50%", y: "80%" } : { x: "50%", y: "20%" };
-        } else if (idx === sortedPlayers.length - 1) {
-          // 3人以上の場合、自分を最後（下）に
-          position = { x: "50%", y: "80%" };
-        } else {
-          const N = sortedPlayers.length;
-          const angle = (idx / (N - 1)) * Math.PI + Math.PI * 0.1;
-          const radius = 38;
-          position = {
-            x: `${50 + radius * Math.cos(angle)}%`,
-            y: `${35 + radius * Math.sin(angle)}%`,
-          };
-        }
-        // 獲得トリック枚数
-        const tricks = player.tricks || [];
-        const trickCount = tricks.reduce((sum, arr) => sum + arr.length, 0);
-        return (
-          <div
-            key={player.id + "-seat"}
-            className={`absolute transform -translate-x-1/2 -translate-y-1/2 w-24 h-32 bg-blue-600 rounded-lg border-2 ${
-              isMe ? "border-yellow-400 shadow-lg z-30" : "border-blue-400 z-20"
-            } flex flex-col items-center justify-center p-2`}
-            style={{ left: position.x, top: position.y }}
-          >
-            <div
-              className={`text-xs font-bold text-center ${
-                isMe ? "text-yellow-200" : "text-white"
-              }`}
-            >
-              {player.name}
-              {isMe && <span className="block text-yellow-300">あなた！</span>}
-            </div>
-            <div className="text-xs text-gray-300 mt-1">
-              カード {player.hand.length}枚
-            </div>
-            {/* 獲得トリック枚数表示 */}
-            <div className="mt-1 flex items-center gap-1">
-              <div className="w-6 h-8 bg-gray-500 rounded shadow-inner flex items-center justify-center text-white text-xs">
-                🂠
-              </div>
-              <span className="text-xs text-white">Á{trickCount}</span>
-            </div>
+      {/* 右側プレイヤー情報パネル */}
+      <div className="absolute top-4 right-4 bg-black bg-opacity-70 text-white p-4 rounded-lg shadow-lg z-20 min-w-48">
+        <h3 className="text-sm font-bold text-yellow-300 mb-3 text-center">
+          プレイヤー情報
+        </h3>
+        <div className="space-y-2">
+          {sortedPlayers.map((player) => {
+            const isMe = player.id === myPlayerId;
+            const tricks = player.tricks || [];
+            const cardCountInTricks = tricks.reduce(
+              (sum, arr) => sum + arr.length,
+              0
+            );
 
-            {/* 現在のスコア表示 */}
-            {player.totalScore !== undefined && (
-              <div className="mt-1 text-xs">
-                <span
-                  className={`font-bold ${
-                    (player.totalScore || 0) > 0
-                      ? "text-green-400"
-                      : (player.totalScore || 0) < 0
-                      ? "text-red-400"
-                      : "text-gray-300"
-                  }`}
-                >
-                  {(player.totalScore || 0) > 0 ? "+" : ""}
-                  {player.totalScore || 0}点
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {/* 出したカードをチェスト全体に対して絶対配置で表示 */}
-      {sortedPlayers.map((player, idx) => {
-        // 出したカード（現在のトリック）
-        let playedCard = null;
-        if (state.phase === "playing" && state.rounds.length > 0) {
-          const currentRound = state.rounds[state.currentRound];
-          const currentTrick =
-            currentRound.tricks[currentRound.tricks.length - 1];
-          const played = currentTrick.cards.find(
-            (c) => c.playerId === player.id
-          );
-          if (played) playedCard = played.card;
-        }
-        if (!playedCard) return null;
-        let top;
-        if (sortedPlayers.length === 2) {
-          top = idx === 0 ? "55%" : "30%";
-        } else {
-          // 3人以上の場合、従来通り座席の位置
-          top = undefined;
-        }
-        return (
-          <div
-            key={player.id + "-playedcard"}
-            className="absolute left-1/2 -translate-x-1/2 z-50"
-            style={
-              top
-                ? { top }
-                : {
-                    top: undefined,
-                    bottom: undefined,
-                    transform: "translate(-50%, -4rem)",
-                  }
-            }
-          >
-            <Card
-              suit={playedCard.suit}
-              rank={playedCard.rank}
-              isSelectable={false}
-              isSelected={false}
-              className={
-                player.id === myPlayerId
-                  ? "scale-110 ring-4 ring-yellow-400"
-                  : ""
-              }
-            />
-          </div>
-        );
-      })}
-
-      {/* ゲーム状態表示 */}
-      <div className="absolute top-1/3 right-4 bg-black bg-opacity-50 text-white p-2 rounded z-10">
-        <div>状態 {state.phase}</div>
-        <div>プレイヤー数: {state.players.length}人</div>
-        {state.rounds.length > 0 && (
-          <div>ラウンド {state.rounds[state.currentRound].roundNumber}</div>
-        )}
-      </div>
-
-      {/* リアルタイムスコアパネル */}
-      {state.phase === "playing" && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white p-3 rounded-lg shadow-lg z-20">
-          <div className="text-center mb-2">
-            <h3 className="text-sm font-bold text-yellow-300">現在のスコア</h3>
-          </div>
-          <div className="flex gap-4">
-            {state.players.map((player) => {
-              const totalScore = player.totalScore || 0;
-              const isMe = player.id === myPlayerId;
-
-              // 現在のラウンドでの獲得カードを取得
-              const currentRoundCards = player.tricks.flat();
-              const heartsCount = currentRoundCards.filter(
-                (card) => card.suit === "hearts"
-              ).length;
-              const hasSpadeQueen = currentRoundCards.some(
-                (card) => card.suit === "spades" && card.rank === "Q"
-              );
-
-              return (
-                <div
-                  key={player.id}
-                  className={`text-center px-2 py-1 rounded ${
-                    isMe
-                      ? "bg-yellow-900 bg-opacity-50"
-                      : "bg-gray-800 bg-opacity-50"
-                  }`}
-                >
+            return (
+              <div
+                key={player.id}
+                className={`p-2 rounded border ${
+                  isMe
+                    ? "border-yellow-400 bg-yellow-900 bg-opacity-30"
+                    : "border-gray-600 bg-gray-800 bg-opacity-30"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
                   <div
-                    className={`text-xs font-bold ${
+                    className={`text-sm font-bold ${
                       isMe ? "text-yellow-300" : "text-white"
                     }`}
                   >
                     {player.name}
+                    {isMe && " (あなた)"}
                   </div>
-                  <div
-                    className={`text-sm font-bold ${
-                      totalScore > 0
-                        ? "text-green-400"
-                        : totalScore < 0
-                        ? "text-red-400"
-                        : "text-gray-300"
-                    }`}
-                  >
-                    {totalScore > 0 ? "+" : ""}
-                    {totalScore}点
+                  {player.isHost && (
+                    <span className="text-xs bg-purple-600 text-white px-1 rounded">
+                      ホスト
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-300 space-y-1">
+                  <div>カード {player.hand.length}枚</div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs">🂠</span>
+                    <span>獲得トリック: {cardCountInTricks}枚</span>
                   </div>
-                  {(heartsCount > 0 || hasSpadeQueen) && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      {heartsCount > 0 && <div>♥{heartsCount}</div>}
-                      {hasSpadeQueen && <div>♠Q</div>}
+                  {player.totalScore !== undefined && (
+                    <div
+                      className={`font-bold ${
+                        (player.totalScore || 0) > 0
+                          ? "text-green-400"
+                          : (player.totalScore || 0) < 0
+                          ? "text-red-400"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      スコア: {(player.totalScore || 0) > 0 ? "+" : ""}
+                      {player.totalScore || 0}点
                     </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
+
+      {/* 中央プレイエリア - 円形レイアウト */}
+      {state.phase === "playing" &&
+        state.rounds.length > 0 &&
+        (() => {
+          const currentRound = state.rounds[state.currentRound];
+          const currentTrick =
+            currentRound.tricks[currentRound.tricks.length - 1];
+
+          return (
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40">
+              <div className="bg-green-800 bg-opacity-90 rounded-2xl p-8 shadow-2xl border-4 border-green-600 min-w-[500px] min-h-[400px] flex flex-col items-center justify-center">
+                <h3 className="text-lg font-bold text-white text-center mb-6">
+                  現在のトリック
+                </h3>
+
+                {/* 円形レイアウトでカードを配置 */}
+                <div className="relative w-80 h-80">
+                  {/* 中央のリードスート表示 */}
+                  {currentTrick && currentTrick.cards.length > 0 && (
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+                      <div className="bg-black bg-opacity-70 rounded-lg p-3 text-center">
+                        <div className="text-xs text-gray-300">
+                          リードスート
+                        </div>
+                        <div className="text-lg font-bold text-white">
+                          {currentTrick.cards[0].card.suit === "hearts" && "♥"}
+                          {currentTrick.cards[0].card.suit === "diamonds" &&
+                            "♦"}
+                          {currentTrick.cards[0].card.suit === "clubs" && "♣"}
+                          {currentTrick.cards[0].card.suit === "spades" && "♠"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* プレイヤーのカードを円形に配置（座席位置固定） */}
+                  {sortedPlayers.map((player, idx) => {
+                    // 出したカード（現在のトリック）
+                    let playedCard = null;
+                    const played = currentTrick.cards.find(
+                      (c) => c.playerId === player.id
+                    );
+                    if (played) playedCard = played.card;
+
+                    const isMe = player.id === myPlayerId;
+                    const totalPlayers = sortedPlayers.length;
+
+                    // 座席位置を固定（プレイヤーID順などで固定）
+                    const angle =
+                      (idx / totalPlayers) * 2 * Math.PI - Math.PI / 2; // 上から開始
+                    const radius = 120; // 円の半径
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+
+                    // プレイ順を計算（リードプレイヤーからの相対位置）
+                    let playOrder = null;
+                    if (currentTrick.cards.length > 0) {
+                      const leadPlayerIndex = sortedPlayers.findIndex(
+                        (p) => p.id === currentRound.leadPlayerId
+                      );
+                      const currentPlayerIndex = idx;
+                      const relativePosition =
+                        (currentPlayerIndex - leadPlayerIndex + totalPlayers) %
+                        totalPlayers;
+                      playOrder = relativePosition + 1;
+                    }
+
+                    return (
+                      <div
+                        key={player.id + "-playedcard"}
+                        className="absolute transform -translate-x-1/2 -translate-y-1/2"
+                        style={{
+                          left: `calc(50% + ${x}px)`,
+                          top: `calc(50% + ${y}px)`,
+                        }}
+                      >
+                        <div className="text-center">
+                          {/* プレイヤー名 */}
+                          <div
+                            className={`text-xs font-bold mb-2 ${
+                              isMe ? "text-yellow-300" : "text-white"
+                            }`}
+                          >
+                            {player.name}
+                            {isMe && " (あなた)"}
+                          </div>
+
+                          {/* カード表示 */}
+                          {playedCard ? (
+                            <div className="relative">
+                              <Card
+                                suit={playedCard.suit}
+                                rank={playedCard.rank}
+                                isSelectable={false}
+                                isSelected={false}
+                                className="scale-90"
+                              />
+                              {/* プレイ順表示 */}
+                              {playOrder && (
+                                <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold">
+                                  {playOrder}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="w-16 h-24 bg-gray-700 border-2 border-dashed border-gray-500 rounded-lg flex items-center justify-center">
+                              <div className="text-xs text-gray-400 text-center">
+                                未出
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+      {/* 左側ゲーム状態表示 */}
+      <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-4 rounded-lg shadow-lg z-20 min-w-48">
+        <h3 className="text-sm font-bold text-blue-300 mb-3 text-center">
+          ゲーム状態
+        </h3>
+        <div className="space-y-2">
+          <div className="text-sm">
+            <span className="text-gray-300">状態:</span>
+            <span className="ml-2 font-bold text-white">{state.phase}</span>
+          </div>
+          <div className="text-sm">
+            <span className="text-gray-300">プレイヤー数:</span>
+            <span className="ml-2 font-bold text-white">
+              {state.players.length}人
+            </span>
+          </div>
+          {state.rounds.length > 0 && (
+            <div className="text-sm">
+              <span className="text-gray-300">ラウンド:</span>
+              <span className="ml-2 font-bold text-white">
+                {state.rounds[state.currentRound].roundNumber}
+              </span>
+            </div>
+          )}
+          {/* 誰の手番か表示 */}
+          {state.phase === "playing" && currentTurnPlayer && (
+            <div className="mt-3">
+              <div
+                className={`px-3 py-2 rounded-lg shadow-lg font-bold text-sm text-center ${
+                  isMyTurnNow
+                    ? "bg-yellow-400 text-black animate-pulse"
+                    : "bg-white text-blue-700"
+                }`}
+              >
+                {isMyTurnNow
+                  ? "あなたの手番"
+                  : `${currentTurnPlayer.name}の手番`}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* スコア表示 */}
       {state.phase === "scoring" && (
@@ -830,19 +888,46 @@ const GameTable: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {state.players
-              .sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0))
-              .map((player, index) => {
+            {(() => {
+              // スコアでソートして順位を決定
+              const sortedPlayers = [...state.players].sort(
+                (a, b) => (b.totalScore || 0) - (a.totalScore || 0)
+              );
+
+              // 同点処理：同じスコアのプレイヤーに同じ順位を付与
+              const playersWithRank: Array<
+                (typeof sortedPlayers)[0] & { rank: number }
+              > = [];
+
+              sortedPlayers.forEach((player, index) => {
+                const totalScore = player.totalScore || 0;
+                let rank = index + 1;
+
+                // 前のプレイヤーと同じスコアの場合は同じ順位
+                if (index > 0) {
+                  const prevScore = sortedPlayers[index - 1].totalScore || 0;
+                  if (totalScore === prevScore) {
+                    rank = playersWithRank[index - 1].rank;
+                  }
+                }
+
+                playersWithRank.push({ ...player, rank });
+              });
+
+              return playersWithRank.map((player) => {
                 const totalScore = player.totalScore || 0;
                 const isMe = player.id === myPlayerId;
-                const isWinner = index === 0;
+                const isWinner = player.rank === 1;
+                const isTop3 = player.rank <= 3;
 
                 return (
                   <div
                     key={player.id}
                     className={`p-3 rounded border-2 ${
                       isWinner
-                        ? "border-yellow-400 bg-yellow-900 bg-opacity-30"
+                        ? "border-yellow-400 bg-yellow-900 bg-opacity-30 animate-pulse"
+                        : isTop3
+                        ? "border-orange-400 bg-orange-900 bg-opacity-30"
                         : isMe
                         ? "border-blue-400 bg-blue-900 bg-opacity-30"
                         : "border-gray-600 bg-gray-800 bg-opacity-30"
@@ -850,11 +935,21 @@ const GameTable: React.FC = () => {
                   >
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        {isWinner && <span className="text-2xl">🏆</span>}
+                        {isWinner && (
+                          <span className="text-3xl animate-bounce">🏆</span>
+                        )}
+                        {player.rank === 2 && (
+                          <span className="text-2xl">🥈</span>
+                        )}
+                        {player.rank === 3 && (
+                          <span className="text-2xl">🥉</span>
+                        )}
                         <span
                           className={`font-bold ${
                             isWinner
                               ? "text-yellow-300"
+                              : isTop3
+                              ? "text-orange-300"
                               : isMe
                               ? "text-blue-300"
                               : "text-white"
@@ -878,39 +973,155 @@ const GameTable: React.FC = () => {
                           {totalScore}点
                         </div>
                         <div className="text-sm text-gray-400">
-                          {index + 1}位
+                          {player.rank}位
                         </div>
                       </div>
                     </div>
                   </div>
                 );
-              })}
+              });
+            })()}
           </div>
 
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center space-y-3">
             <button
-              className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition mr-2"
-              onClick={() => {
-                // 新しいゲーム開始
-                console.log("新しいゲームを開始します");
-              }}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition"
+              onClick={() => setShowGameDetails(!showGameDetails)}
             >
-              新しいゲーム
+              {showGameDetails ? "詳細を隠す" : "詳細を見る"}
             </button>
-            <button
-              className="px-6 py-2 bg-gray-600 text-white rounded-lg font-bold hover:bg-gray-700 transition"
-              onClick={() => {
-                // ホームに戻る
-                window.location.href = "/";
-              }}
-            >
-              ホームに戻る
-            </button>
+
+            <div className="flex justify-center space-x-2">
+              <button
+                className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition"
+                onClick={() => {
+                  // 新しいゲーム開始
+                  if (!state?.roomId) return;
+                  gameContext?.restartGame?.(
+                    { roomId: state.roomId },
+                    (res) => {
+                      if (res?.error) {
+                        alert(`エラー: ${res.error}`);
+                      } else {
+                        console.log("新しいゲーム開始成功");
+                      }
+                    }
+                  );
+                }}
+              >
+                新しいゲーム
+              </button>
+              <button
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg font-bold hover:bg-gray-700 transition"
+                onClick={() => {
+                  // ゲーム状態をクリアしてホームに戻る
+                  if (gameContext?.state?.roomId) {
+                    // 必要に応じてサーバーに切断通知を送信
+                    console.log("ゲームから退出します");
+                  }
+                  // ゲーム状態をリセット
+                  gameContext?.resetGame?.();
+                  // ホームに戻る
+                  navigate("/");
+                }}
+              >
+                ホームに戻る
+              </button>
+            </div>
           </div>
+
+          {/* 詳細表示 */}
+          {showGameDetails && (
+            <div className="mt-6 border-t border-gray-600 pt-6">
+              <h3 className="text-xl font-bold text-yellow-300 mb-4 text-center">
+                ラウンド別スコア履歴
+              </h3>
+
+              {/* スコア表 */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-600">
+                      <th className="text-left py-2 px-2 text-gray-300">
+                        プレイヤー
+                      </th>
+                      {state.rounds.map((round, index) => (
+                        <th
+                          key={index}
+                          className="py-2 px-2 text-center text-gray-300"
+                        >
+                          ラウンド{round.roundNumber}
+                        </th>
+                      ))}
+                      <th className="py-2 px-2 text-center text-yellow-300 font-bold">
+                        合計
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.players
+                      .sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0))
+                      .map((player) => {
+                        const isMe = player.id === myPlayerId;
+                        const totalScore = player.totalScore || 0;
+
+                        return (
+                          <tr
+                            key={player.id}
+                            className="border-b border-gray-700"
+                          >
+                            <td
+                              className={`py-2 px-2 font-bold ${
+                                isMe ? "text-blue-300" : "text-white"
+                              }`}
+                            >
+                              {player.name}
+                              {isMe && " (あなた)"}
+                            </td>
+                            {state.rounds.map((round, roundIndex) => {
+                              const roundScore =
+                                player.roundScores?.[roundIndex] || 0;
+                              return (
+                                <td
+                                  key={roundIndex}
+                                  className={`py-2 px-2 text-center ${
+                                    roundScore > 0
+                                      ? "text-green-400"
+                                      : roundScore < 0
+                                      ? "text-red-400"
+                                      : "text-gray-400"
+                                  }`}
+                                >
+                                  {roundScore > 0 ? "+" : ""}
+                                  {roundScore}
+                                </td>
+                              );
+                            })}
+                            <td
+                              className={`py-2 px-2 text-center font-bold ${
+                                totalScore > 0
+                                  ? "text-green-400"
+                                  : totalScore < 0
+                                  ? "text-red-400"
+                                  : "text-gray-300"
+                              }`}
+                            >
+                              {totalScore > 0 ? "+" : ""}
+                              {totalScore}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* 誰の手番か常時表示（プレイフェーズ中） */}
+      {/*
       {state.phase === "playing" && currentTurnPlayer && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-40">
           <div
@@ -926,6 +1137,7 @@ const GameTable: React.FC = () => {
           </div>
         </div>
       )}
+      */}
 
       {/* あなたが初手番です通知 */}
       {showLeadNotice && (
@@ -990,6 +1202,10 @@ const GameTable: React.FC = () => {
             </div>
             <button
               onClick={() => {
+                if (animationTimerRef.current) {
+                  clearTimeout(animationTimerRef.current);
+                  animationTimerRef.current = null;
+                }
                 setShowExchangeAnimation(false);
                 setReceivedCards([]);
               }}
@@ -1204,11 +1420,13 @@ const GameTable: React.FC = () => {
               sortedHand.map((card, i) => {
                 // 出せるカードかどうか判定
                 let isPlayable = true;
-                if (state.phase === "playing" && isMyTurnNow) {
+                if (state.phase === "playing") {
                   const currentRound = state.rounds[state.currentRound];
                   const currentTrick =
                     currentRound.tricks[currentRound.tricks.length - 1];
-                  if (currentTrick.cards.length > 0) {
+
+                  // 自分の手番の場合のみ「スーツを辿る」ルールを適用
+                  if (isMyTurnNow && currentTrick.cards.length > 0) {
                     const leadSuit =
                       currentTrick.leadSuit || currentTrick.cards[0].card.suit;
                     const hasLeadSuit = sortedHand.some(
@@ -1218,7 +1436,9 @@ const GameTable: React.FC = () => {
                       isPlayable = false;
                     }
                   }
-                  // ハートブレイク: リードでハートを出せない
+
+                  // ハートブレイクのルール（リード時）
+                  // どのプレイヤーにも「ハートはまだ出せない」ことを視覚的に示す
                   if (
                     currentTrick.cards.length === 0 &&
                     card.suit === "hearts" &&
@@ -1227,7 +1447,9 @@ const GameTable: React.FC = () => {
                     const onlyHearts = sortedHand.every(
                       (c) => c.suit === "hearts"
                     );
-                    if (!onlyHearts) isPlayable = false;
+                    if (!onlyHearts) {
+                      isPlayable = false;
+                    }
                   }
                 }
                 const isSelected = selectedIdx === i;
@@ -1263,7 +1485,7 @@ const GameTable: React.FC = () => {
                         }
                       }}
                       className={
-                        !isPlayable && state.phase === "playing" && isMyTurnNow
+                        !isPlayable && state.phase === "playing"
                           ? "opacity-40"
                           : isReceivedCard && state.phase === "playing"
                           ? "ring-4 ring-green-400 animate-pulse"
@@ -1429,6 +1651,23 @@ const GameTable: React.FC = () => {
           className="bg-green-500 text-white px-4 py-2 rounded text-sm block w-full"
         >
           ラウンド情報確認
+        </button>
+
+        {/* 強制ラウンド終了ボタン */}
+        <button
+          onClick={() => {
+            if (!state?.roomId) return;
+            gameContext?.forceFinishRound?.({ roomId: state.roomId }, (res) => {
+              if (res?.error) {
+                alert(`エラー: ${res.error}`);
+              } else {
+                console.log("強制ラウンド終了成功");
+              }
+            });
+          }}
+          className="bg-yellow-600 text-white px-4 py-2 rounded text-sm block w-full"
+        >
+          強制ラウンド終了
         </button>
       </div>
     </div>

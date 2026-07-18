@@ -397,7 +397,7 @@ export class GameManager {
         }
       }
     }
-    return winner ? winner.playerId : "";
+    return winner ? winner.playerId : trick.cards[0].playerId;
   }
 
   // ラウンド終了
@@ -434,7 +434,24 @@ export class GameManager {
     for (const player of this.state.players) {
       if (!player.roundScores) player.roundScores = [];
       player.roundScores.push(roundScores[player.id]);
+      // 累計スコアもここで更新
+      player.totalScore = (player.totalScore || 0) + roundScores[player.id];
+      // 次のラウンドのためにトリック記録をリセット
+      player.tricks = [];
     }
+
+    // ゲーム終了条件のチェック
+    if (this.state.rounds.length >= this.state.players.length) {
+      // プレイヤー数と同じラウンド数に達したらゲーム終了
+      this.finishGame();
+      return;
+    }
+
+    // デッキを再生成してシャッフル
+    this.state.deck = shuffle(generateDeck());
+
+    // カードを再配布
+    this.dealCards();
 
     // ラウンド終了後、次のラウンドを開始
     this.startNextRound();
@@ -442,10 +459,8 @@ export class GameManager {
 
   // ゲーム終了
   finishGame() {
-    // 各プレイヤーの総スコアを計算
-    for (const player of this.state.players) {
-      player.totalScore = (player.roundScores || []).reduce((a, b) => a + b, 0);
-    }
+    // 各プレイヤーの総スコアは既にfinishRoundで計算済みなので、
+    // ここでは最終的なゲーム終了処理のみを行う
     this.state.phase = "finished";
   }
 

@@ -1,0 +1,59 @@
+services:
+  - type: web
+    name: cancellation-oregonian-hearts-server
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    autoDeployTrigger: commit
+    healthCheckPath: /ready
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: cancellation-oregonian-hearts-redis
+          property: connectionString
+      - key: CORS_ORIGIN
+        sync: false
+      - key: COH_TRUST_PROXY_HEADERS
+        value: true
+      - key: COH_REDIS_KEY_PREFIX
+        value: coh-prod
+      - key: COH_REDIS_LOCK_TTL_MS
+        value: 10000
+      - key: COH_ROOM_TTL_MS
+        value: 86400000
+      - key: COH_ROOM_CLEANUP_INTERVAL_MS
+        value: 3600000
+      - key: COH_JOIN_ROOM_ATTEMPT_LIMIT
+        value: 12
+      - key: COH_JOIN_ROOM_ATTEMPT_WINDOW_MS
+        value: 60000
+      - key: COH_RESUME_SESSION_ATTEMPT_LIMIT
+        value: 30
+      - key: COH_RESUME_SESSION_ATTEMPT_WINDOW_MS
+        value: 60000
+
+  - type: web
+    name: cancellation-oregonian-hearts-client
+    runtime: static
+    rootDir: client
+    buildCommand: npm install --include=dev --no-audit --no-fund && npm run build
+    staticPublishPath: dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: VITE_SERVER_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: keyvalue
+    name: cancellation-oregonian-hearts-redis
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+    persistenceMode: journal-snapshot
