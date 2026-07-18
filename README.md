@@ -244,6 +244,8 @@ After the first deploy, confirm the actual Render URLs in the dashboard. If Rend
 
 The Blueprint uses Render Key Value with `ipAllowList: []`, so the Redis-compatible service is internal-only. The server receives its Redis connection string through `REDIS_URL`.
 
+For the free Render Key Value plan, `persistenceMode` is `off`. This is enough for public smoke testing with friends, but room state and session tokens can be lost when Render restarts the Key Value instance. Upgrade the Key Value instance before relying on server-restart recovery in production.
+
 The server exposes two health endpoints:
 
 - `GET /health`: lightweight process liveness check. Returns `{ "ok": true }`.

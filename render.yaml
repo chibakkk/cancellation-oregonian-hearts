@@ -56,4 +56,4 @@ services:
     region: oregon
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
-    persistenceMode: journal-snapshot
+    persistenceMode: off
