@@ -1,5 +1,7 @@
 # Cancellation Oregonian Hearts
 
+[![CI](https://github.com/chibakkk/cancellation-oregonian-hearts/actions/workflows/ci.yml/badge.svg)](https://github.com/chibakkk/cancellation-oregonian-hearts/actions/workflows/ci.yml)
+
 Cancellation Oregonian Hearts is a real-time trick-taking card game for 4 to 10 players.
 
 The app is built as a browser client plus a central Socket.IO server. The server is the source of truth for rooms, turns, legal card validation, scoring, and session restore.
