@@ -157,7 +157,7 @@ Public URL E2E after deployment:
   -ServerUrl https://your-server.example.com
 ```
 
-This checks the public client URL, verifies the deployed server `/health` and `/ready` endpoints, then runs the same 4-player E2E flow against the public client. Use this after Render or another host has finished deploying both services.
+This checks the public client URL, verifies the deployed server `/ready` endpoint, then runs the same 4-player E2E flow against the public client. Use this after Render or another host has finished deploying both services.
 
 ## CI
 
@@ -235,12 +235,12 @@ Notes:
 - `cancellation-oregonian-hearts-client`: static site for the Vite build.
 - `cancellation-oregonian-hearts-redis`: Render Key Value instance for rooms, sessions, locks, and rate limits.
 
-When creating the Blueprint, Render will ask for these values because they are marked with `sync: false`:
+The Blueprint sets these public Render URLs by default:
 
-- Server `CORS_ORIGIN`: set this to the deployed client origin, for example `https://cancellation-oregonian-hearts-client.onrender.com`.
-- Client `VITE_SERVER_URL`: set this to the deployed server URL, for example `https://cancellation-oregonian-hearts-server.onrender.com`.
+- Server `CORS_ORIGIN`: `https://cancellation-oregonian-hearts-client.onrender.com`
+- Client `VITE_SERVER_URL`: `https://cancellation-oregonian-hearts-server.onrender.com`
 
-After the first deploy, confirm the actual Render URLs in the dashboard. If Render assigns a different hostname, update `CORS_ORIGIN` and `VITE_SERVER_URL`, then redeploy the affected service. The client must be rebuilt after changing `VITE_SERVER_URL`.
+After the first deploy, confirm the actual Render URLs in the dashboard. If Render assigns a different hostname, update `CORS_ORIGIN` and `VITE_SERVER_URL` in `render.yaml` or the Render dashboard, then redeploy the affected service. The client must be rebuilt after changing `VITE_SERVER_URL`.
 
 The Blueprint uses Render Key Value with `ipAllowList: []`, so the Redis-compatible service is internal-only. The server receives its Redis connection string through `REDIS_URL`.
 
@@ -284,7 +284,6 @@ Before deploying:
 
 Before sharing a URL with friends:
 
-- Deployed server `/health` returns `{ "ok": true }`.
 - Deployed server `/ready` returns Redis-backed `stateStore` and `rateLimitStore`.
 - Deployed client loads without console connection errors.
 - Create a room from the deployed client.

@@ -15,7 +15,7 @@ services:
           name: cancellation-oregonian-hearts-redis
           property: connectionString
       - key: CORS_ORIGIN
-        sync: false
+        value: https://cancellation-oregonian-hearts-client.onrender.com
       - key: COH_TRUST_PROXY_HEADERS
         value: true
       - key: COH_REDIS_KEY_PREFIX
@@ -44,7 +44,7 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: VITE_SERVER_URL
-        sync: false
+        value: https://cancellation-oregonian-hearts-server.onrender.com
     routes:
       - type: rewrite
         source: /*

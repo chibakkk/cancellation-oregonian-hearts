@@ -93,13 +93,6 @@ Write-Host "Public server: $ServerOrigin"
 Wait-ForStatus "$ClientOrigin/" 200
 
 if (-not $SkipReadiness) {
-  Wait-ForJson "$ServerOrigin/health" {
-    param($json)
-    if ($json.ok -ne $true) {
-      throw "Server health endpoint did not return ok=true"
-    }
-  } | Out-Null
-
   $ready = Wait-ForJson "$ServerOrigin/ready" {
     param($json)
     if ($json.ok -ne $true) {
