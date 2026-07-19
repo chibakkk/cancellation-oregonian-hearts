@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlayingCardV2 } from "./PlayingCardV2";
+import { RulesContent } from "./RulesContent";
 import { useGame } from "../context/useGame";
 import type { Card, CompletedTrickView, PlayedCard, PlayerView, StoredResult, Trick } from "../types/coh";
 
@@ -222,6 +223,7 @@ export default function NewGameTable() {
     cardId: string;
     message: string;
   } | null>(null);
+  const [showRulesModal, setShowRulesModal] = useState(false);
   const [dismissedRoundResultId, setDismissedRoundResultId] = useState<string | null>(null);
   const savedResultId = useRef<string | null>(null);
   const previewTimers = useRef<number[]>([]);
@@ -941,6 +943,15 @@ export default function NewGameTable() {
 
           <button
             type="button"
+            data-testid="open-rules-modal-button"
+            className="w-full rounded-md border border-emerald-700/20 bg-emerald-50 px-4 py-2 font-semibold text-emerald-900 transition hover:bg-emerald-100"
+            onClick={() => setShowRulesModal(true)}
+          >
+            ルールを見る
+          </button>
+
+          <button
+            type="button"
             className="w-full rounded-md border border-slate-300 bg-white px-4 py-2 font-semibold"
             onClick={() => navigate("/")}
           >
@@ -948,6 +959,35 @@ export default function NewGameTable() {
           </button>
         </aside>
       </div>
+
+      {showRulesModal && (
+        <div
+          data-testid="rules-modal"
+          className="fixed inset-0 z-[80] bg-slate-950/70 p-3 backdrop-blur-sm md:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rules-heading"
+        >
+          <div className="mx-auto flex max-h-[calc(100vh-1.5rem)] max-w-5xl flex-col overflow-hidden rounded-md border border-white/40 bg-white shadow-2xl md:max-h-[calc(100vh-3rem)]">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+              <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                Rule Reference
+              </span>
+              <button
+                type="button"
+                data-testid="rules-modal-close-button"
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                onClick={() => setShowRulesModal(false)}
+              >
+                閉じる
+              </button>
+            </div>
+            <div className="overflow-y-auto bg-[linear-gradient(135deg,#06382f,#0f766e_55%,#fde68a_190%)] p-3 md:p-5">
+              <RulesContent compact />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

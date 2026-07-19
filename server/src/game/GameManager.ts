@@ -15,6 +15,7 @@ const RANK_ORDER = [
   "3",
   "2",
 ];
+const INITIAL_TOTAL_SCORE = 100;
 
 function generateDeck(): Card[] {
   const suits: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
@@ -82,6 +83,7 @@ export class GameManager {
       hand: [],
       tricks: [],
       isHost: idx === 0,
+      totalScore: INITIAL_TOTAL_SCORE,
     }));
     return {
       players,
@@ -435,7 +437,7 @@ export class GameManager {
       if (!player.roundScores) player.roundScores = [];
       player.roundScores.push(roundScores[player.id]);
       // 累計スコアもここで更新
-      player.totalScore = (player.totalScore || 0) + roundScores[player.id];
+      player.totalScore = (player.totalScore ?? INITIAL_TOTAL_SCORE) + roundScores[player.id];
       // 次のラウンドのためにトリック記録をリセット
       player.tricks = [];
     }

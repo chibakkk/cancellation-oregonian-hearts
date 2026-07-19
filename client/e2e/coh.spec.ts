@@ -48,6 +48,16 @@ test("home focuses on joining and links to the room creation page", async ({
   await expect(page.getByTestId("join-password-input")).toBeVisible();
   await expect(page.getByTestId("create-password-input")).toHaveCount(0);
 
+  await page.getByTestId("rules-link").click();
+  await expect(page).toHaveURL(/\/rules$/);
+  await expect(page.getByTestId("rules-heading")).toBeVisible();
+  await expect(page.getByTestId("rules-heading")).toHaveText("Rule");
+  await expect(page.locator("body")).toContainText("スペードQ");
+
+  await page.getByTestId("rules-back-home-link").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("join-room-heading")).toBeVisible();
+
   await page.getByTestId("create-room-button").click();
   await expect(page).toHaveURL(/\/create-room$/);
   await expect(page.getByTestId("create-room-heading")).toBeVisible();
@@ -368,6 +378,13 @@ async function playUntilTrickWinnerPreview(
 test("creates a room and restores the session after reload", async ({ page }) => {
   const errors = trackPageErrors(page);
   const roomId = await createRoom(page, "E2EHost");
+
+  await page.getByTestId("open-rules-modal-button").click();
+  await expect(page.getByTestId("rules-modal")).toBeVisible();
+  await expect(page.getByTestId("rules-heading")).toHaveText("Rule");
+  await expect(page.locator("body")).toContainText("スペードQ");
+  await page.getByTestId("rules-modal-close-button").click();
+  await expect(page.getByTestId("rules-modal")).toHaveCount(0);
 
   await page.reload();
   await expect(page).toHaveURL(/\/game$/);

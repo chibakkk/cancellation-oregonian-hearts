@@ -306,6 +306,13 @@ export function NewHome() {
             >
               ルームを作成する
             </Link>
+            <Link
+              to="/rules"
+              data-testid="rules-link"
+              className="mt-2 inline-flex w-full items-center justify-center rounded-md px-4 py-2 text-sm font-bold text-emerald-800 transition hover:bg-emerald-50"
+            >
+              ルールを見る
+            </Link>
           </div>
 
           <div className="mt-5 border-t border-slate-200 pt-4">

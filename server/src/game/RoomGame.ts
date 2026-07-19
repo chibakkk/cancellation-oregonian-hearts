@@ -51,6 +51,8 @@ const RANK_VALUE: Record<Rank, number> = {
   "2": 2,
 };
 
+const INITIAL_TOTAL_SCORE = 100;
+
 function cardKey(card: Card): string {
   return `${card.suit}:${card.rank}`;
 }
@@ -112,6 +114,7 @@ export class RoomGame {
       roundNumber: 0,
       maxRounds: 0,
       restCards: [],
+      noPenaltyBonusCarryover: 0,
       roundSummaries: [],
       createdAt: new Date().toISOString(),
     };
@@ -124,6 +127,12 @@ export class RoomGame {
       "Host";
     const room = new RoomGame(snapshot.state.roomId, snapshot.state.password, hostName);
     room.state = cloneJson(snapshot.state);
+    room.state.noPenaltyBonusCarryover ??= 0;
+    for (const player of room.state.players) {
+      if (player.roundScores.length === 0 && player.totalScore === 0) {
+        player.totalScore = INITIAL_TOTAL_SCORE;
+      }
+    }
     room.nextPlayerNumber = snapshot.nextPlayerNumber;
     room.pendingPasses = cloneJson(snapshot.pendingPasses ?? {});
     room.lastCompletedTrick = snapshot.lastCompletedTrick
@@ -257,7 +266,7 @@ export class RoomGame {
       player.hand = [];
       player.capturedCards = [];
       player.roundScores = [];
-      player.totalScore = 0;
+      player.totalScore = INITIAL_TOTAL_SCORE;
     }
     this.pendingPasses = {};
     this.lastCompletedTrick = undefined;
@@ -265,6 +274,7 @@ export class RoomGame {
     this.state.roundNumber = 0;
     this.state.maxRounds = 0;
     this.state.restCards = [];
+    this.state.noPenaltyBonusCarryover = 0;
     this.state.currentRound = undefined;
     this.state.roundSummaries = [];
   }
@@ -343,7 +353,7 @@ export class RoomGame {
       hand: [],
       capturedCards: [],
       roundScores: [],
-      totalScore: 0,
+      totalScore: INITIAL_TOTAL_SCORE,
     };
     this.nextPlayerNumber += 1;
     return player;
@@ -548,12 +558,17 @@ export class RoomGame {
       };
     });
 
+    const bonusPool = 52 + this.state.noPenaltyBonusCarryover;
     const playersWithoutPenalty = rawScores.filter((score) => score.penalty === 0);
     if (playersWithoutPenalty.length > 0) {
-      const bonus = Math.floor(52 / playersWithoutPenalty.length);
+      const bonus = Math.floor(bonusPool / playersWithoutPenalty.length);
+      this.state.noPenaltyBonusCarryover =
+        bonusPool % playersWithoutPenalty.length;
       for (const score of playersWithoutPenalty) {
         score.bonus = bonus;
       }
+    } else {
+      this.state.noPenaltyBonusCarryover = bonusPool;
     }
 
     return rawScores.map(({ player, penalty, bonus }) => ({

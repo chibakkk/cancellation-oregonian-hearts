@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "src/serverApp.ts",
   "scripts": {
     "test": "ts-node --prefer-ts-exts src/game/RoomGame.test.ts && ts-node --prefer-ts-exts src/integration/ServerIntegration.test.ts",

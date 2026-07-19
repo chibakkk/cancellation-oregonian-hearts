@@ -84,6 +84,7 @@ export interface GameState {
   roundNumber: number;
   maxRounds: number;
   restCards: Card[];
+  noPenaltyBonusCarryover: number;
   currentRound?: Round;
   roundSummaries: RoundSummary[];
   createdAt: string;

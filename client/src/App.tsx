@@ -4,6 +4,7 @@ import NewGameTable from "./components/NewGameTable";
 import { GameProvider } from "./context/GameProvider";
 import { CreateRoom } from "./pages/CreateRoom";
 import { NewHome } from "./pages/NewHome";
+import { Rules } from "./pages/Rules";
 
 function App() {
   return (
@@ -22,6 +23,10 @@ function App() {
           <Route
             path="/create-room"
             element={<CreateRoom />}
+          />
+          <Route
+            path="/rules"
+            element={<Rules />}
           />
         </Routes>
       </Router>

@@ -52,6 +52,13 @@ export function CreateRoom() {
           >
             トップへ戻る
           </Link>
+          <Link
+            to="/rules"
+            data-testid="create-room-rules-link"
+            className="ml-2 inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800 transition hover:bg-emerald-100"
+          >
+            ルールを見る
+          </Link>
 
           <div className="mt-6">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">

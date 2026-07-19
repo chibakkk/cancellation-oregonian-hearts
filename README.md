@@ -2,18 +2,63 @@
 
 [![CI](https://github.com/chibakkk/cancellation-oregonian-hearts/actions/workflows/ci.yml/badge.svg)](https://github.com/chibakkk/cancellation-oregonian-hearts/actions/workflows/ci.yml)
 
-Cancellation Oregonian Hearts is a real-time trick-taking card game for 4 to 10 players.
+リアルタイムで遊べる、4-10人用のトリックテイキングカードゲームです。  
+現在のバージョン: `v0.1.0`
 
-The app is built as a browser client plus a central Socket.IO server. The server is the source of truth for rooms, turns, legal card validation, scoring, and session restore.
+公開URL: [https://cancellation-oregonian-hearts-client.onrender.com/](https://cancellation-oregonian-hearts-client.onrender.com/)
 
-## Repository
+## このゲームについて
 
-- `client`: React / Vite frontend
-- `server`: Node.js / Socket.IO game server
+Cancellation Oregonian Hearts は、2組のトランプを使うハーツ系のトリックテイキングです。
 
-## Local Setup
+同じカードが複数枚存在するため、同一カードが出るとキャンセルが発生します。通常のマストフォローや失点カードに加えて、キャンセルによって勝敗候補から外れるカードを読むのが特徴です。
 
-Install dependencies in both workspaces.
+## ルール概要
+
+- プレイ人数は4-10人です。
+- 2組、合計104枚のトランプを使います。
+- 104枚を人数で割って配り、余ったカードは最終トリックの勝者が引き取ります。余り札にハートやスペードQがあれば、その失点も含めて計算します。
+- 各トリックでは、最初にカードを出したプレイヤーが親です。
+- 基本はマストフォローです。リードスートを持っている場合は、そのスートを出す必要があります。
+- リードスートを持っていないプレイヤーが別スートを出した場合、そのカード以降の比較対象スートが変わることがあります。
+- 同じスート・同じランクのカードが複数出ると、そのカードはキャンセルされ、トリックの勝敗から除外されます。
+- 勝敗候補がすべてキャンセルされた場合は、そのトリックの親が勝ちます。
+- ハートは1枚につき `-1` 点です。
+- スペードQは `-13` 点です。
+- 失点カードを1枚も取らなかったプレイヤーには、ラウンド終了時にボーナスが入ります。ボーナスは `52 + 持ち越し点` を無失点者数で割った整数点で、余りは次ラウンドへ持ち越します。
+- 全員 `100` 点から開始し、各ラウンドの増減を累計します。
+- 全ラウンド終了後、合計点で順位を決めます。
+
+アプリ内でもトップページの「ルールを見る」から確認できます。
+
+## 遊び方
+
+1. 公開URLを開きます。
+2. ルームを作る人は「ルームを作成する」から、名前と4桁パスワードを入力してルームを作成します。
+3. 参加者には、ゲーム画面に表示される5文字のルームIDと4桁パスワードを共有します。
+4. 参加者はトップページから、名前、ルームID、パスワードを入力して参加します。
+5. 4人以上集まったらホストがゲームを開始します。
+
+同じブラウザであれば、タブを閉じてもトップページの復帰導線から戻れる場合があります。
+
+## 現在の注意点
+
+- Render の無料枠では、アクセスがない時間が続くとサーバーがスリープすることがあります。
+- スリープ後の初回アクセスでは、起動まで数十秒かかる場合があります。
+- 現在は友人との公開テスト向けです。本格公開前に、スマホ表示やルール説明をさらに整備する予定です。
+
+## リポジトリ構成
+
+- `client`: React / Vite のブラウザクライアント
+- `server`: Node.js / Socket.IO のゲームサーバー
+- `scripts`: Compose や公開URL確認用の補助スクリプト
+- `docs`: セキュリティ/運用メモ
+
+サーバーはルーム状態、ターン、合法手判定、得点計算、セッション復帰の正本です。公開環境では Redis を使ってルーム状態とセッショントークンを保持します。
+
+## ローカル開発
+
+依存関係をインストールします。
 
 ```powershell
 cd server
@@ -23,7 +68,7 @@ cd ..\client
 npm install
 ```
 
-Run the server and client in separate terminals.
+サーバーとクライアントを別ターミナルで起動します。
 
 ```powershell
 cd server
@@ -35,107 +80,96 @@ cd client
 npm run dev
 ```
 
-Open the client URL shown by Vite. By default the client connects to `http://localhost:3001`.
+Vite が表示したURLを開きます。デフォルトではクライアントは `http://localhost:3001` のサーバーへ接続します。
 
 ## Docker Compose
 
-For a production-like local run with Redis:
+Redis を含む本番に近いローカル構成で起動できます。
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 ```
 
-To run a one-command Compose smoke test:
+Compose のスモークテストを1コマンドで実行する場合:
 
 ```powershell
 .\scripts\compose-smoke.ps1
 ```
 
-The smoke test builds and starts `client`, `server`, and `redis`, verifies `GET /ready` is Redis-backed, checks the client health endpoint, then runs `docker compose down`. Add `-KeepRunning` if you want to inspect the app after the checks:
+確認後も起動したままにしたい場合:
 
 ```powershell
 .\scripts\compose-smoke.ps1 -KeepRunning
 ```
 
-Default local URLs:
+デフォルトURL:
 
 - Client: `http://localhost:8080`
 - Server: `http://localhost:3001`
 - Server readiness: `http://localhost:3001/ready`
 
-The Compose setup runs three services: `client`, `server`, and `redis`. Redis stores room state, session tokens, room locks, and rate-limit buckets.
+Compose 構成では `client`, `server`, `redis` の3サービスを起動します。Redis はルーム状態、セッショントークン、部屋ごとの排他制御、レート制限に使います。
 
-`docker-compose.local.yml` only contains local build overrides. In this environment it disables npm strict SSL inside Docker builds because the local Docker VM cannot validate the registry certificate chain. Keep production deployments on `docker-compose.yml` and remove the local override unless your deployment environment needs the same workaround.
+## 環境変数
 
-Before using this outside your local machine, update these values in `docker-compose.yml` or your deployment environment:
+`.env.example` をデプロイ設定の元にしてください。
 
-- `CORS_ORIGIN`: deployed client origin, for example `https://coh.example.com`
-- `VITE_SERVER_URL`: deployed server URL, for example `https://coh-server.example.com`
+クライアント:
 
-## Environment Variables
+- `VITE_SERVER_URL`: Socket.IO サーバーのURL。例: `https://coh-server.example.com`
 
-Use `.env.example` as the source of truth for deployment settings.
+サーバー:
 
-Client:
+- `PORT`: HTTP / Socket.IO の待受ポート。デフォルトは `3001`。
+- `CORS_ORIGIN`: 接続を許可するブラウザのオリジン。本番では公開クライアントURLを設定します。
+- `COH_TRUST_PROXY_HEADERS`: Render など信頼できるリバースプロキシ配下でのみ `true` にします。
+- `REDIS_URL`: Redis 接続URL。設定するとルーム状態とレート制限に Redis を使います。
+- `COH_STATE_BACKEND`: `memory` にすると状態を永続化しません。公開環境では使わないでください。
+- `COH_STATE_DIR`: Redis 未使用時のJSONルーム状態ディレクトリ。
+- `COH_STATE_FILE`: 旧JSON状態ファイルの移行/フォールバック用パス。
+- `COH_ROOM_TTL_MS`: 非アクティブなルームの有効期限。デフォルトは24時間。
+- `COH_ROOM_CLEANUP_INTERVAL_MS`: 期限切れルームの定期削除間隔。デフォルトは1時間。
+- `COH_REDIS_KEY_PREFIX`: Redis キーのプレフィックス。
+- `COH_REDIS_LOCK_TTL_MS`: Redis の部屋別ロックTTL。
+- `COH_JOIN_ROOM_ATTEMPT_LIMIT`: ルーム参加試行の制限回数。
+- `COH_JOIN_ROOM_ATTEMPT_WINDOW_MS`: ルーム参加試行の制限ウィンドウ。
+- `COH_RESUME_SESSION_ATTEMPT_LIMIT`: セッション復帰試行の制限回数。
+- `COH_RESUME_SESSION_ATTEMPT_WINDOW_MS`: セッション復帰試行の制限ウィンドウ。
 
-- `VITE_SERVER_URL`: URL of the Socket.IO server. Example: `https://coh-server.example.com`.
+## 永続化
 
-Server:
+サーバーは3つの永続化モードに対応しています。
 
-- `PORT`: HTTP/Socket.IO listen port. Default: `3001`.
-- `CORS_ORIGIN`: allowed browser origin. Use the deployed client URL in production.
-- `COH_TRUST_PROXY_HEADERS`: set to `true` only behind a trusted reverse proxy so pre-auth rate limits can use `X-Forwarded-For`.
-- `REDIS_URL`: Redis connection URL. When set, Redis is used for room state and rate limiting.
-- `COH_STATE_BACKEND`: set to `memory` only for throwaway local runs. Leave unset for JSON file persistence.
-- `COH_STATE_DIR`: JSON room-state directory when Redis is not used.
-- `COH_STATE_FILE`: legacy JSON state file path used for migration/fallback.
-- `COH_ROOM_TTL_MS`: inactive room lifetime in milliseconds. Default: `86400000` (24 hours). Set `0` to disable expiration.
-- `COH_ROOM_CLEANUP_INTERVAL_MS`: interval for deleting expired rooms while the server is running. Default: `3600000` (1 hour). Set `0` to disable the periodic scan.
-- `COH_REDIS_KEY_PREFIX`: Redis key prefix for rooms and locks. Default: `coh`.
-- `COH_REDIS_LOCK_TTL_MS`: Redis per-room lock timeout. Default: `10000`.
-- `COH_JOIN_ROOM_ATTEMPT_LIMIT`: repeated join attempts allowed per room and client address. Default: `12`.
-- `COH_JOIN_ROOM_ATTEMPT_WINDOW_MS`: join-attempt rate-limit window. Default: `60000`.
-- `COH_RESUME_SESSION_ATTEMPT_LIMIT`: repeated session restore attempts allowed per room, player, and client address. Default: `30`.
-- `COH_RESUME_SESSION_ATTEMPT_WINDOW_MS`: session-restore rate-limit window. Default: `60000`.
+- Redis: `REDIS_URL` を設定します。公開環境ではこれを推奨します。
+- JSONファイル: `REDIS_URL` を設定しない場合のローカル開発向けです。
+- Memory: `COH_STATE_BACKEND=memory`。再起動で状態が消えます。
 
-## Persistence
+公開環境では Redis を使うことで、サーバープロセスの再起動や再デプロイ後もルーム状態とセッショントークンを復帰しやすくしています。
 
-The server supports three persistence modes.
+## テスト
 
-- Redis: set `REDIS_URL`. Recommended for public deployment.
-- JSON files: leave `REDIS_URL` unset. Good for local development and simple single-server hosting.
-- Memory: set `COH_STATE_BACKEND=memory`. State is lost on restart.
-
-For public play with friends, prefer Redis so rooms and session tokens survive server restarts and redeploys. Redis is also used for Socket.IO event rate limiting when `REDIS_URL` is set; otherwise rate limiting falls back to in-memory buckets.
-
-Rooms that have not been updated for `COH_ROOM_TTL_MS` are treated as expired. Expired rooms are skipped and deleted during server startup, deleted when accessed, and also cleaned by the periodic scan while the server is running. Session tokens are stored with their room, so they are removed with the expired room.
-
-## Tests
-
-Server tests:
+サーバーテスト:
 
 ```powershell
 cd server
 npm test
 ```
 
-Client build:
+クライアントビルド:
 
 ```powershell
 cd client
 npm run build
 ```
 
-E2E tests:
+E2E:
 
 ```powershell
 cd client
 npm run test:e2e
 ```
 
-The E2E suite starts its own server and Vite client on test ports.
-
-Compose E2E against already running Docker services:
+Compose 起動済み環境へのE2E:
 
 ```powershell
 .\scripts\compose-smoke.ps1 -KeepRunning
@@ -147,9 +181,7 @@ cd ..
 docker compose -f docker-compose.yml -f docker-compose.local.yml down
 ```
 
-Use this when you want to verify the actual Docker client/server/Redis stack, not the Playwright-managed test servers.
-
-Public URL E2E after deployment:
+公開URLへのスモークE2E:
 
 ```powershell
 .\scripts\public-e2e.ps1 `
@@ -157,53 +189,41 @@ Public URL E2E after deployment:
   -ServerUrl https://your-server.example.com
 ```
 
-This checks the public client URL, verifies the deployed server `/ready` endpoint, then runs the same 4-player E2E flow against the public client. Use this after Render or another host has finished deploying both services.
-
 ## CI
 
-GitHub Actions workflow is defined in `.github/workflows/ci.yml`.
+GitHub Actions は `.github/workflows/ci.yml` で定義しています。
 
-The CI workflow runs on pushes to `main`, pull requests, and manual dispatch. It uses Node.js 20 and checks:
+CIでは次を確認します。
 
-- Server dependency install with `npm ci`.
-- Client dependency install with `npm ci`.
-- Playwright Chromium browser install.
-- Server tests: `cd server && npm test`.
-- Server build: `cd server && npm run build`.
-- Client build: `cd client && npm run build`.
-- Playwright E2E: `cd client && npm run test:e2e`.
+- Server dependency install
+- Client dependency install
+- Playwright Chromium install
+- Server tests
+- Server build
+- Client build
+- Playwright E2E
 
-Docker Compose smoke tests and public URL E2E are kept as explicit pre-deploy checks because they need Docker or deployed URLs.
+Compose smoke test と公開URL E2E は Docker やデプロイ済みURLが必要なため、明示的なデプロイ前チェックとして扱います。
 
-## Deployment Shape
+## デプロイ
 
-Recommended first public setup:
+このリポジトリには Render Blueprint の `render.yaml` を含めています。
 
-- Frontend: Vercel, Netlify, or another static host
-- Server: Render, Fly.io, Railway, or another Node.js host with WebSocket support
-- State: Redis such as Upstash Redis or Railway Redis
+Render 構成:
 
-This repository includes a Render Blueprint at `render.yaml` for a first Render-based deployment.
+- `cancellation-oregonian-hearts-server`: Socket.IO サーバー
+- `cancellation-oregonian-hearts-client`: Vite ビルドの静的サイト
+- `cancellation-oregonian-hearts-redis`: ルーム、セッション、ロック、レート制限用の Key Value
 
-Build/deploy order:
+現在の公開URL:
 
-1. Create Redis.
-2. Deploy the server with `REDIS_URL` and `CORS_ORIGIN`.
-3. Confirm the server `/ready` endpoint is Redis-backed.
-4. Deploy the client with `VITE_SERVER_URL`.
-5. Run the public play checks below.
+- Client: `https://cancellation-oregonian-hearts-client.onrender.com`
+- Server: `https://cancellation-oregonian-hearts-server.onrender.com`
 
-### Production Environment Template
-
-Client environment:
+本番用の環境変数例:
 
 ```env
 VITE_SERVER_URL=https://your-server.example.com
-```
-
-Server environment:
-
-```env
 PORT=3001
 CORS_ORIGIN=https://your-client.example.com
 COH_TRUST_PROXY_HEADERS=true
@@ -218,91 +238,29 @@ COH_RESUME_SESSION_ATTEMPT_LIMIT=30
 COH_RESUME_SESSION_ATTEMPT_WINDOW_MS=60000
 ```
 
-Notes:
+Render の無料枠では Redis の永続化設定やサーバーのスリープ挙動に制限があります。公開テストを超えて安定運用する場合は、有料プランや永続化設定の見直しが必要です。
 
-- Use `rediss://` when the Redis provider requires TLS.
-- `CORS_ORIGIN` must exactly match the deployed client origin, including `https://` and no trailing path.
-- Set `COH_TRUST_PROXY_HEADERS=true` only when the server is behind a trusted managed proxy such as Render.
-- `VITE_SERVER_URL` is baked into the client build, so rebuild/redeploy the client after changing it.
-- Use a different `COH_REDIS_KEY_PREFIX` per environment, such as `coh-dev`, `coh-staging`, or `coh-prod`.
-- Do not set `COH_STATE_BACKEND=memory` in public deployments.
+## デプロイ前チェックリスト
 
-### Render Blueprint
+- `cd server && npm test`
+- `cd server && npm run build`
+- `cd client && npm run build`
+- `cd client && npm run test:e2e`
+- GitHub Actions CI が成功している
+- `.\scripts\compose-smoke.ps1`
+- `cd client && npm run test:e2e:compose`
+- 公開後に `.\scripts\public-e2e.ps1 -ClientUrl ... -ServerUrl ...`
+- デプロイ先が WebSocket に対応している
+- `VITE_SERVER_URL` と `CORS_ORIGIN` が正しい
+- `REDIS_URL` が設定され、`/ready` が Redis-backed を返す
+- `COH_REDIS_KEY_PREFIX` が環境ごとに分かれている
+- ルームTTLが遊び方に合っている
+- `docs/security-release-review.md` のリスク棚卸しを確認する
 
-`render.yaml` defines three Render services:
+## 変更履歴
 
-- `cancellation-oregonian-hearts-server`: Docker web service for the Socket.IO server.
-- `cancellation-oregonian-hearts-client`: static site for the Vite build.
-- `cancellation-oregonian-hearts-redis`: Render Key Value instance for rooms, sessions, locks, and rate limits.
+変更履歴は [CHANGELOG.md](./CHANGELOG.md) にまとめています。
 
-The Blueprint sets these public Render URLs by default:
+## ライセンス
 
-- Server `CORS_ORIGIN`: `https://cancellation-oregonian-hearts-client.onrender.com`
-- Client `VITE_SERVER_URL`: `https://cancellation-oregonian-hearts-server.onrender.com`
-
-After the first deploy, confirm the actual Render URLs in the dashboard. If Render assigns a different hostname, update `CORS_ORIGIN` and `VITE_SERVER_URL` in `render.yaml` or the Render dashboard, then redeploy the affected service. The client must be rebuilt after changing `VITE_SERVER_URL`.
-
-The Blueprint uses Render Key Value with `ipAllowList: []`, so the Redis-compatible service is internal-only. The server receives its Redis connection string through `REDIS_URL`.
-
-For the free Render Key Value plan, `persistenceMode` is `off`. This is enough for public smoke testing with friends, but room state and session tokens can be lost when Render restarts the Key Value instance. Upgrade the Key Value instance before relying on server-restart recovery in production.
-
-The server exposes two health endpoints:
-
-- `GET /health`: lightweight process liveness check. Returns `{ "ok": true }`.
-- `GET /ready`: dependency readiness check. Verifies the state store and rate-limit store, then returns their descriptions. Use this for deployment readiness checks when Redis is enabled.
-
-Expected production `/ready` response shape:
-
-```json
-{
-  "ok": true,
-  "stateStore": "redis-rooms:coh-prod:room:*",
-  "rateLimitStore": "redis-rate-limit:coh-prod:rate:*"
-}
-```
-
-## Pre-Deploy Checklist
-
-Before deploying:
-
-- Server tests pass: `cd server && npm test`.
-- Server build passes: `cd server && npm run build`.
-- Client build passes: `cd client && npm run build`.
-- E2E suite passes: `cd client && npm run test:e2e`.
-- GitHub Actions CI is green for the target branch.
-- Compose smoke test passes locally: `.\scripts\compose-smoke.ps1`.
-- Compose E2E passes locally against the Docker stack: `cd client && npm run test:e2e:compose`.
-- Public URL E2E command is ready for the target URLs: `.\scripts\public-e2e.ps1 -ClientUrl ... -ServerUrl ...`.
-- Redis has been created and its connection URL is available.
-- Deployment platform supports WebSocket connections.
-- Client and server URLs are decided before setting `VITE_SERVER_URL` and `CORS_ORIGIN`.
-- `COH_REDIS_KEY_PREFIX` is unique for the target environment.
-- Room TTL is acceptable for play sessions. Default is 24 hours.
-- Read the security and operations review in `docs/security-release-review.md`.
-
-## Public Release Checklist
-
-Before sharing a URL with friends:
-
-- Deployed server `/ready` returns Redis-backed `stateStore` and `rateLimitStore`.
-- Deployed client loads without console connection errors.
-- Create a room from the deployed client.
-- Join the room from another browser, private window, or device.
-- Start a 4-player test room.
-- Play several tricks and confirm turns update for every player.
-- Reload one player during play and confirm session restore works.
-- Close one tab, open the room again, and confirm session restore works.
-- Complete at least one round and confirm round 2 starts.
-- Stop/restart the server once, then confirm an existing session can resume.
-- Confirm an expired/abandoned room is removed after the configured TTL.
-- Confirm wrong room password and duplicate name errors display as readable Japanese text.
-- Run `.\scripts\public-e2e.ps1 -ClientUrl ... -ServerUrl ...` against the deployed URLs.
-
-## Rollback Notes
-
-If a deployment has trouble:
-
-- Keep the old client deployment available until the new server `/ready` passes.
-- Roll back the client first if `VITE_SERVER_URL` is wrong.
-- Roll back the server if `/ready` fails or Redis-backed restore does not work.
-- Preserve Redis data unless the issue is bad state data. Deleting Redis keys removes active rooms and session tokens.
+現時点ではライセンス方針は未整理です。公開範囲を広げる前に明記する予定です。

@@ -2,6 +2,8 @@ import assert from "assert";
 import { RoomGame } from "./RoomGame";
 import { Card, GameState, Player, Rank, Suit } from "./model";
 
+const INITIAL_TOTAL_SCORE = 100;
+
 function card(id: string, suit: Suit, rank: Rank, deckIndex: 1 | 2 = 1): Card {
   return { id, suit, rank, deckIndex };
 }
@@ -14,11 +16,11 @@ function player(id: string, name: string, hand: Card[]): Player {
     hand,
     capturedCards: [],
     roundScores: [],
-    totalScore: 0,
+    totalScore: INITIAL_TOTAL_SCORE,
   };
 }
 
-function gameWithHands(hands: Card[][], maxRounds = 1): RoomGame {
+function gameWithHands(hands: Card[][], maxRounds = 1, noPenaltyBonusCarryover = 0): RoomGame {
   const game = new RoomGame("ABCDE", "1234", "A");
   const players = hands.map((hand, index) =>
     player(`P${index + 1}`, String.fromCharCode(65 + index), hand)
@@ -31,6 +33,7 @@ function gameWithHands(hands: Card[][], maxRounds = 1): RoomGame {
     roundNumber: 1,
     maxRounds,
     restCards: [],
+    noPenaltyBonusCarryover,
     currentRound: {
       number: 1,
       firstLeaderId: "P1",
@@ -57,6 +60,30 @@ function gameWithHands(hands: Card[][], maxRounds = 1): RoomGame {
 
 function play(game: RoomGame, playerId: string, cardId: string): void {
   game.playCard(playerId, cardId);
+}
+
+function testPlayersStartWith100Points(): void {
+  const game = new RoomGame("SCORE", "1234", "Host");
+  game.addPlayer("P2");
+  game.addPlayer("P3");
+  game.addPlayer("P4");
+
+  assert.deepEqual(
+    game.getView().players.map((item) => item.totalScore),
+    [INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE]
+  );
+
+  game.startGame();
+  assert.deepEqual(
+    game.getView().players.map((item) => item.totalScore),
+    [INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE]
+  );
+
+  game.restart();
+  assert.deepEqual(
+    game.getView().players.map((item) => item.totalScore),
+    [INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE, INITIAL_TOTAL_SCORE]
+  );
 }
 
 function completePassingIfNeeded(game: RoomGame, playerIds: string[]): number {
@@ -160,6 +187,56 @@ function testSpadeQueenPenaltyAndNoPenaltyBonus(): void {
   assert.equal(summary.scores.find((score) => score.playerId === "P4")?.penalty, -13);
   assert.equal(summary.scores.find((score) => score.playerId === "P4")?.total, -13);
   assert.equal(summary.scores.find((score) => score.playerId === "P1")?.bonus, 17);
+  assert.equal(game.getStateForTests().noPenaltyBonusCarryover, 1);
+}
+
+function testNoPenaltyBonusUsesCarryover(): void {
+  const game = gameWithHands(
+    [
+      [card("c2", "clubs", "2")],
+      [card("h2", "hearts", "2")],
+      [card("sq", "spades", "Q")],
+      [card("ca", "clubs", "A")],
+    ],
+    1,
+    2
+  );
+
+  play(game, "P1", "c2");
+  play(game, "P2", "h2");
+  play(game, "P3", "sq");
+  play(game, "P4", "ca");
+
+  const summary = game.getStateForTests().roundSummaries[0];
+  assert.equal(summary.scores.find((score) => score.playerId === "P1")?.bonus, 18);
+  assert.equal(summary.scores.find((score) => score.playerId === "P2")?.bonus, 18);
+  assert.equal(summary.scores.find((score) => score.playerId === "P3")?.bonus, 18);
+  assert.equal(summary.scores.find((score) => score.playerId === "P4")?.bonus, 0);
+  assert.equal(game.getStateForTests().noPenaltyBonusCarryover, 0);
+}
+
+function testRestCardsAreTakenByFinalTrickWinnerAndScored(): void {
+  const game = gameWithHands([
+    [card("c2", "clubs", "2")],
+    [card("c3", "clubs", "3")],
+    [card("c4", "clubs", "4")],
+    [card("ca", "clubs", "A")],
+  ]);
+  game.getStateForTests().restCards = [
+    card("rest-heart", "hearts", "5"),
+    card("rest-spade-q", "spades", "Q"),
+  ];
+
+  play(game, "P1", "c2");
+  play(game, "P2", "c3");
+  play(game, "P3", "c4");
+  play(game, "P4", "ca");
+
+  const state = game.getStateForTests();
+  const summary = state.roundSummaries[0];
+  assert.equal(state.restCards.length, 0);
+  assert.equal(summary.scores.find((score) => score.playerId === "P4")?.penalty, -14);
+  assert.equal(summary.scores.find((score) => score.playerId === "P4")?.total, -14);
 }
 
 function testAllCanceledTrickFallsBackToLeader(): void {
@@ -260,7 +337,10 @@ function testFullGameScenariosFinishForAllPlayerCounts(): void {
   }
 }
 
+testPlayersStartWith100Points();
 testSpadeQueenPenaltyAndNoPenaltyBonus();
+testNoPenaltyBonusUsesCarryover();
+testRestCardsAreTakenByFinalTrickWinnerAndScored();
 testAllCanceledTrickFallsBackToLeader();
 testOregonianChangesLeadSuit();
 testCompletedTrickPreviewIsExposedAndCleared();
