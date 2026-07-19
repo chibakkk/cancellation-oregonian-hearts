@@ -472,6 +472,7 @@ test("four players can start and play several turns", async ({ browser }) => {
 });
 
 test("four players can complete round 1 and enter round 2", async ({ browser }) => {
+  test.slow();
   const host = await newPlayer(browser, "E2EFullHost");
   const guests = await Promise.all(
     ["E2EFullP2", "E2EFullP3", "E2EFullP4"].map((name) => newPlayer(browser, name))

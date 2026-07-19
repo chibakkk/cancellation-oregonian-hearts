@@ -77,6 +77,10 @@ function playerRankings(players: PlayerView[]) {
     }));
 }
 
+function signedScore(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
+
 function saveResult(result: StoredResult) {
   try {
     const current = JSON.parse(
@@ -218,6 +222,7 @@ export default function NewGameTable() {
     cardId: string;
     message: string;
   } | null>(null);
+  const [dismissedRoundResultId, setDismissedRoundResultId] = useState<string | null>(null);
   const savedResultId = useRef<string | null>(null);
   const previewTimers = useRef<number[]>([]);
   const handHintTimer = useRef<number | null>(null);
@@ -225,6 +230,8 @@ export default function NewGameTable() {
   const me = state?.players.find((player) => player.id === myPlayerId);
   const currentTurnId = state?.currentRound?.currentTurnPlayerId;
   const latestSummary = state?.roundSummaries[state.roundSummaries.length - 1];
+  const latestSummaryId =
+    state && latestSummary ? `${state.roomId}:${latestSummary.roundNumber}` : null;
   const rankings = useMemo(
     () => (state ? playerRankings(state.players) : []),
     [state]
@@ -243,6 +250,10 @@ export default function NewGameTable() {
   useEffect(() => {
     setSelectedPassIds([]);
   }, [state?.roundNumber, state?.phase]);
+
+  useEffect(() => {
+    setDismissedRoundResultId(null);
+  }, [latestSummaryId]);
 
   useEffect(() => {
     return () => {
@@ -356,6 +367,17 @@ export default function NewGameTable() {
   const winningPlayed = isPreviewingCompletedTrick
     ? winningPlayedCard(displayTrick)
     : undefined;
+  const roundResultScores = latestSummary
+    ? [...latestSummary.scores].sort((a, b) => b.total - a.total)
+    : [];
+  const roundTopScore = roundResultScores[0];
+  const showRoundResultPanel = Boolean(
+    latestSummary &&
+      latestSummaryId &&
+      dismissedRoundResultId !== latestSummaryId &&
+      state.phase !== "finished" &&
+      !isPreviewingCompletedTrick
+  );
 
   const showHandHint = (cardId: string, message: string) => {
     if (handHintTimer.current) {
@@ -557,6 +579,142 @@ export default function NewGameTable() {
           {actionError && (
             <div className="absolute left-1/2 top-[16%] z-40 w-[min(92%,520px)] -translate-x-1/2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 shadow-sm">
               {actionError}
+            </div>
+          )}
+
+          {showRoundResultPanel && latestSummary && (
+            <div
+              data-testid="round-result-panel"
+              className="absolute left-1/2 top-[45%] z-[35] w-[min(92%,560px)] -translate-x-1/2 -translate-y-1/2 rounded-md border border-white/70 bg-white/95 p-5 shadow-xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Round Complete
+                  </p>
+                  <h2 className="mt-1 text-2xl font-bold text-slate-950">
+                    Round {latestSummary.roundNumber} 終了
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {state.phase === "passing"
+                      ? `次はRound ${state.roundNumber}のカード交換です。`
+                      : `Round ${state.roundNumber}に進みました。`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700"
+                  onClick={() => latestSummaryId && setDismissedRoundResultId(latestSummaryId)}
+                >
+                  閉じる
+                </button>
+              </div>
+
+              {roundTopScore && (
+                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                  <div className="text-xs font-semibold text-amber-700">
+                    このラウンドのトップ
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <span className="truncate text-lg font-bold text-slate-950">
+                      {roundTopScore.playerName}
+                    </span>
+                    <span className="font-mono text-lg font-bold text-slate-950">
+                      {signedScore(roundTopScore.total)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
+                {roundResultScores.map((score) => (
+                  <div
+                    key={score.playerId}
+                    className="grid grid-cols-[1fr_auto] gap-3 rounded-md bg-slate-50 px-3 py-2"
+                  >
+                    <span className="truncate font-medium">{score.playerName}</span>
+                    <span className="font-mono">
+                      {signedScore(score.penalty)} + {signedScore(score.bonus)} ={" "}
+                      <strong>{signedScore(score.total)}</strong>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {state.phase === "finished" && !isPreviewingCompletedTrick && (
+            <div
+              data-testid="game-result-panel"
+              className="absolute left-1/2 top-[47%] z-[45] w-[min(94%,640px)] -translate-x-1/2 -translate-y-1/2 rounded-md border border-amber-200 bg-amber-50/95 p-6 shadow-2xl"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                Final Result
+              </p>
+              <h2 className="mt-1 text-3xl font-bold text-slate-950">ゲーム終了</h2>
+              <p className="mt-2 text-sm text-slate-700">
+                全{state.maxRounds}ラウンドが終了しました。
+              </p>
+
+              <div className="mt-5 space-y-2">
+                {rankings.map((player) => (
+                  <div
+                    key={player.name}
+                    className={`flex items-center justify-between rounded-md px-4 py-3 ${
+                      player.rank === 1
+                        ? "border border-amber-300 bg-white shadow-sm"
+                        : "bg-white/80"
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-bold ${
+                          player.rank === 1
+                            ? "bg-amber-500 text-white"
+                            : "bg-slate-200 text-slate-700"
+                        }`}
+                      >
+                        {player.rank}
+                      </span>
+                      <span className="truncate text-lg font-bold text-slate-950">
+                        {player.name}
+                      </span>
+                    </div>
+                    <span className="font-mono text-lg font-bold text-slate-950">
+                      {player.totalScore}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                {isHost ? (
+                  <button
+                    type="button"
+                    className="rounded-md bg-slate-950 px-4 py-3 font-semibold text-white"
+                    onClick={() =>
+                      restartGame({}, (response) => {
+                        if (response.error) {
+                          setActionError(response.error);
+                        }
+                      })
+                    }
+                  >
+                    同じメンバーで新しく始める
+                  </button>
+                ) : (
+                  <div className="rounded-md border border-amber-200 bg-white/80 px-4 py-3 text-center text-sm font-semibold text-slate-700">
+                    ホストが新しいゲームを開始するのを待っています
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-900"
+                  onClick={() => navigate("/")}
+                >
+                  ロビーへ戻る
+                </button>
+              </div>
             </div>
           )}
 
@@ -778,36 +936,6 @@ export default function NewGameTable() {
                   </div>
                 ))}
               </div>
-            </section>
-          )}
-
-          {state.phase === "finished" && (
-            <section className="rounded-md border border-amber-200 bg-amber-50 p-4 shadow-sm">
-              <h2 className="text-lg font-bold">ゲーム終了</h2>
-              <div className="mt-3 space-y-2">
-                {rankings.map((player) => (
-                  <div
-                    key={player.name}
-                    className="flex justify-between rounded-md bg-white px-3 py-2"
-                  >
-                    <span>{player.rank}位 {player.name}</span>
-                    <span className="font-mono font-bold">{player.totalScore}</span>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="mt-4 w-full rounded-md bg-slate-950 px-4 py-2 font-semibold text-white"
-                onClick={() =>
-                  restartGame({}, (response) => {
-                    if (response.error) {
-                      setActionError(response.error);
-                    }
-                  })
-                }
-              >
-                同じメンバーで新しく始める
-              </button>
             </section>
           )}
 
