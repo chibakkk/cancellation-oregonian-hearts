@@ -49,6 +49,7 @@ export default {
       },
       fontFamily: {
         sans: ["Inter", "Noto Sans JP", "system-ui", "sans-serif"],
+        brand: ["Nunito", "Inter", "Noto Sans JP", "sans-serif"],
         mont: ["Montserrat", "Inter", "Noto Sans JP", "sans-serif"],
         jp: ["Noto Sans JP", "Inter", "sans-serif"],
         card: ["Georgia", "serif"],

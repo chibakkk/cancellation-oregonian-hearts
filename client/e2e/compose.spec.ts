@@ -17,7 +17,7 @@ function trackPageErrors(page: Page): string[] {
 }
 
 async function createRoom(page: Page, playerName: string): Promise<string> {
-  await page.goto("/");
+  await page.goto("/create-room");
   await page.getByTestId("player-name-input").fill(playerName);
   await page.getByTestId("create-password-input").fill("1234");
   await expect(page.getByTestId("create-room-button")).toBeEnabled();

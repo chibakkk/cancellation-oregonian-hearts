@@ -24,7 +24,7 @@ function trackPageErrors(page: Page): string[] {
 }
 
 async function createRoom(page: Page, playerName: string): Promise<string> {
-  await page.goto("/");
+  await page.goto("/create-room");
   await page.getByTestId("player-name-input").fill(playerName);
   await page.getByTestId("create-password-input").fill("1234");
   await expect(page.getByTestId("create-room-button")).toBeEnabled();
@@ -37,6 +37,28 @@ async function createRoom(page: Page, playerName: string): Promise<string> {
   expect(match?.[1], "room id should be visible on game screen").toBeTruthy();
   return match![1];
 }
+
+test("home focuses on joining and links to the room creation page", async ({
+  page,
+}) => {
+  const errors = trackPageErrors(page);
+
+  await page.goto("/");
+  await expect(page.getByTestId("join-room-heading")).toBeVisible();
+  await expect(page.getByTestId("join-password-input")).toBeVisible();
+  await expect(page.getByTestId("create-password-input")).toHaveCount(0);
+
+  await page.getByTestId("create-room-button").click();
+  await expect(page).toHaveURL(/\/create-room$/);
+  await expect(page.getByTestId("create-room-heading")).toBeVisible();
+  await expect(page.getByTestId("create-password-input")).toBeVisible();
+  await expect(page.getByTestId("join-password-input")).toHaveCount(0);
+
+  await page.getByTestId("back-home-link").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("join-room-heading")).toBeVisible();
+  expect(errors).toEqual([]);
+});
 
 async function joinRoom(page: Page, roomId: string, playerName: string): Promise<void> {
   await page.goto("/");
@@ -418,7 +440,7 @@ test("connection badge shows disconnect state and manual reconnect", async ({
 
   await page.goto("/");
   await expect(page.getByTestId("connection-badge")).toContainText("接続中");
-  await expect(page.getByTestId("create-room-button")).toBeEnabled();
+  await expect(page.getByTestId("join-room-button")).toBeEnabled();
 
   await page.evaluate(() => {
     const debugWindow = window as typeof window & {
@@ -431,12 +453,12 @@ test("connection badge shows disconnect state and manual reconnect", async ({
   await expect(page.getByTestId("connection-detail")).toContainText(
     "接続が切断されました"
   );
-  await expect(page.getByTestId("create-room-button")).toBeDisabled();
+  await expect(page.getByTestId("join-room-button")).toBeDisabled();
   await expect(page.getByTestId("connection-reconnect-button")).toBeEnabled();
 
   await page.getByTestId("connection-reconnect-button").click();
   await expect(page.getByTestId("connection-badge")).toContainText("接続中");
-  await expect(page.getByTestId("create-room-button")).toBeEnabled();
+  await expect(page.getByTestId("join-room-button")).toBeEnabled();
   expect(errors).toEqual([]);
 });
 
