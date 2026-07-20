@@ -9,7 +9,7 @@ jobs:
   test-build-e2e:
     name: Test, Build, and E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
