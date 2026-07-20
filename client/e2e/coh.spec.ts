@@ -289,6 +289,26 @@ async function expectMobileCompactCardsUseFaceLayout(page: Page): Promise<void> 
   ).toBe(true);
 }
 
+async function handCardLayoutModes(page: Page): Promise<
+  Array<{ cardId: string; layout: string | null; rank: string }>
+> {
+  const cards = page.locator(
+    '[data-testid="hand-zone"] [data-testid="playing-card"]'
+  );
+  await expect(cards.first()).toBeVisible();
+  return cards.evaluateAll((elements) =>
+    elements.map((element) => {
+      const cardId = element.getAttribute("data-card-id") ?? "";
+      const rank = cardId.split("-").at(-1) ?? "";
+      return {
+        cardId,
+        layout: element.getAttribute("data-card-layout"),
+        rank,
+      };
+    })
+  );
+}
+
 async function clickNextPlayableCard(
   players: PlayerSession[],
   timeoutMs = 8_000
@@ -864,6 +884,67 @@ test.describe("large table layout", () => {
       }
     });
   }
+});
+
+test.describe("card layout modes", () => {
+  test("desktop hand keeps pip layouts for number and ace cards", async ({
+    browser,
+  }) => {
+    const { players, roomId, errorBuckets } = await setupStartedRoom(
+      browser,
+      4,
+      "E2ECardDesktop"
+    );
+
+    try {
+      const layouts = await handCardLayoutModes(players[0].page);
+      const pipRankCards = layouts.filter(
+        (card) => card.rank !== "J" && card.rank !== "Q" && card.rank !== "K"
+      );
+      const faceRankCards = layouts.filter((card) =>
+        ["J", "Q", "K"].includes(card.rank)
+      );
+
+      expect(pipRankCards.length, "desktop hand should include pip-rank cards").toBeGreaterThan(0);
+      expect(faceRankCards.length, "desktop hand should include face-rank cards").toBeGreaterThan(0);
+      expect(
+        pipRankCards.every((card) => card.layout === "pips"),
+        "desktop number and ace cards should use the classic pip layout"
+      ).toBe(true);
+      expect(
+        faceRankCards.every((card) => card.layout === "face"),
+        "desktop J/Q/K cards should use the face layout"
+      ).toBe(true);
+      await expect(players[0].page.locator("body")).toContainText(roomId);
+      expect(errorBuckets.flat()).toEqual([]);
+    } finally {
+      await closePlayers(players);
+    }
+  });
+
+  test("mobile compact hand keeps the readable face layout", async ({
+    browser,
+  }) => {
+    const { host, players, roomId, errorBuckets } = await setupStartedMobileRoom(
+      browser,
+      4,
+      "E2ECardMobile"
+    );
+
+    try {
+      const layouts = await handCardLayoutModes(host.page);
+      expect(layouts.length, "mobile hand should include cards").toBeGreaterThan(0);
+      expect(
+        layouts.every((card) => card.layout === "face"),
+        "mobile compact hand cards should all use the face layout"
+      ).toBe(true);
+      await expectNoDocumentHorizontalOverflow(host.page);
+      await expect(host.page.locator("body")).toContainText(roomId);
+      expect(errorBuckets.flat()).toEqual([]);
+    } finally {
+      await closePlayers(players);
+    }
+  });
 });
 
 test.describe("mobile table layout", () => {
