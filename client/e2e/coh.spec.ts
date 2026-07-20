@@ -87,9 +87,20 @@ async function newPlayer(browser: Browser, name: string): Promise<PlayerSession>
   return { name, page };
 }
 
-async function newMobilePlayer(browser: Browser, name: string): Promise<PlayerSession> {
+type ViewportSize = {
+  width: number;
+  height: number;
+};
+
+const DEFAULT_MOBILE_VIEWPORT: ViewportSize = { width: 390, height: 844 };
+
+async function newMobilePlayer(
+  browser: Browser,
+  name: string,
+  viewport = DEFAULT_MOBILE_VIEWPORT
+): Promise<PlayerSession> {
   const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
+    viewport,
     isMobile: true,
   });
   const page = await context.newPage();
@@ -133,12 +144,13 @@ async function setupStartedRoom(
 async function setupStartedMobileRoom(
   browser: Browser,
   playerCount: number,
-  namePrefix: string
+  namePrefix: string,
+  viewport = DEFAULT_MOBILE_VIEWPORT
 ): Promise<StartedRoom> {
-  const host = await newMobilePlayer(browser, `${namePrefix}Host`);
+  const host = await newMobilePlayer(browser, `${namePrefix}Host`, viewport);
   const guests = await Promise.all(
     Array.from({ length: playerCount - 1 }, (_, index) =>
-      newMobilePlayer(browser, `${namePrefix}P${index + 2}`)
+      newMobilePlayer(browser, `${namePrefix}P${index + 2}`, viewport)
     )
   );
   const players = [host, ...guests];
@@ -950,6 +962,59 @@ test.describe("mobile table layout", () => {
       await closePlayers(players);
     }
   });
+
+  for (const viewport of [
+    { label: "small phone", width: 375, height: 667 },
+    { label: "large phone", width: 430, height: 932 },
+  ]) {
+    test(`4 players stay usable on a ${viewport.label} viewport`, async ({
+      browser,
+    }, testInfo) => {
+      const { host, players, roomId, errorBuckets } = await setupStartedMobileRoom(
+        browser,
+        4,
+        `E2EMobile${viewport.width}`,
+        { width: viewport.width, height: viewport.height }
+      );
+
+      try {
+        await expect(host.page.locator("body")).toContainText(/Round\s+1\s*\/\s*4/i);
+        await expect(host.page.getByTestId("mobile-game-table")).toBeVisible();
+        await expect(host.page.getByTestId("player-seat")).toHaveCount(4);
+        await expectNoDocumentHorizontalOverflow(host.page);
+        await expectLocatorBoxesInViewport(
+          host.page,
+          host.page.getByTestId("hand-zone"),
+          `${viewport.label} hand zone`
+        );
+        await expectMobileCompactCardsUseFaceLayout(host.page);
+
+        await playUntilVisiblePlayedCards(players, host.page, 3);
+        await expect(host.page.getByTestId("played-card")).toHaveCount(3);
+        await expectLocatorBoxesInViewport(
+          host.page,
+          host.page.getByTestId("played-card"),
+          `${viewport.label} played card`
+        );
+        await expectLocatorBoxesInsideParent(
+          host.page.getByTestId("played-card"),
+          host.page.getByTestId("game-table"),
+          `${viewport.label} played card`
+        );
+        await expectNoDocumentHorizontalOverflow(host.page);
+
+        await testInfo.attach(`mobile-${viewport.width}x${viewport.height}-table`, {
+          body: await host.page.screenshot({ fullPage: false }),
+          contentType: "image/png",
+        });
+
+        await expect(host.page.locator("body")).toContainText(roomId);
+        expect(errorBuckets.flat()).toEqual([]);
+      } finally {
+        await closePlayers(players);
+      }
+    });
+  }
 
   test("10 players keep the mobile table, hand, and played cards in bounds", async ({
     browser,
