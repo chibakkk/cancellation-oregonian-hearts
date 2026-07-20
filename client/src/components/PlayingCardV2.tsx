@@ -120,7 +120,16 @@ function pipTextClass(
     return compact ? "text-[0.72rem]" : "text-[0.82rem]";
   }
   if (compact) {
-    return count && count >= 9 ? "text-[0.8rem]" : "text-lg";
+    if (count && count >= 9) {
+      return "text-[0.72rem]";
+    }
+    if (count && count >= 7) {
+      return "text-[0.82rem]";
+    }
+    if (count && count >= 5) {
+      return "text-[0.9rem]";
+    }
+    return "text-base";
   }
   if (count && count >= 9) {
     return "text-[0.95rem]";
@@ -143,7 +152,7 @@ function pipBoxClass(
     return compact ? "w-3 text-center" : "w-4 text-center";
   }
   if (count && count >= 9) {
-    return compact ? "w-3.5 text-center" : "w-4 text-center";
+    return compact ? "w-3 text-center" : "w-4 text-center";
   }
   return "";
 }
@@ -161,12 +170,12 @@ export function PlayingCardV2({
 }: PlayingCardV2Props) {
   const size = mini ? "h-[72px] w-[50px]" : compact ? "h-24 w-16" : "h-32 w-24";
   const cornerText = mini ? "text-[8px]" : compact ? "text-[10px]" : "text-[13px]";
-  const faceRankText = mini ? "text-xl" : compact ? "text-3xl" : "text-4xl";
-  const faceSuitText = mini ? "text-2xl" : compact ? "text-4xl" : "text-5xl";
+  const faceRankText = mini ? "text-base" : compact ? "text-xl" : "text-4xl";
+  const faceSuitText = mini ? "text-lg" : compact ? "text-2xl" : "text-5xl";
   const faceInset = mini
-    ? "inset-x-1.5 inset-y-3"
+    ? "inset-x-2 inset-y-4"
     : compact
-    ? "inset-x-2 inset-y-5"
+    ? "inset-x-3 inset-y-7"
     : "inset-x-3 inset-y-7";
   const cardPadding = mini ? "p-1" : "p-1.5";
   const cornerBox = mini
@@ -190,12 +199,14 @@ export function PlayingCardV2({
   const pipText = pipTextClass(count, compact, mini);
   const pipBox = pipBoxClass(count, compact, mini);
   const interactive = Boolean(onClick);
+  const pipLayoutCount = count !== null && !compact && !mini && !simple ? count : null;
 
   return (
     <button
       type="button"
       data-testid="playing-card"
       data-card-id={card.id}
+      data-card-layout={pipLayoutCount !== null ? "pips" : "face"}
       data-playable={playable ? "true" : "false"}
       aria-disabled={unavailable || !interactive}
       onClick={onClick}
@@ -225,8 +236,8 @@ export function PlayingCardV2({
         </div>
       )}
 
-      {count && !simple ? (
-        PIP_LAYOUT[count].map((position, index) => (
+      {pipLayoutCount !== null ? (
+        PIP_LAYOUT[pipLayoutCount].map((position, index) => (
           <span
             key={`${card.id}-${index}`}
             className={`absolute ${position} ${pipBox} ${pipText} font-bold leading-none ${SUIT_CLASS[card.suit]}`}

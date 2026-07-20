@@ -87,6 +87,15 @@ async function newPlayer(browser: Browser, name: string): Promise<PlayerSession>
   return { name, page };
 }
 
+async function newMobilePlayer(browser: Browser, name: string): Promise<PlayerSession> {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  return { name, page };
+}
+
 async function closePlayers(players: PlayerSession[]): Promise<void> {
   await Promise.all(players.map((player) => player.page.context().close()));
 }
@@ -114,6 +123,38 @@ async function setupStartedRoom(
   await host.page.getByTestId("start-game-button").click();
 
   for (const player of players) {
+    await expect(player.page.getByTestId("playing-card").first()).toBeVisible();
+    await expect(player.page.locator("body")).toContainText(roomId);
+  }
+
+  return { host, players, roomId, errorBuckets };
+}
+
+async function setupStartedMobileRoom(
+  browser: Browser,
+  playerCount: number,
+  namePrefix: string
+): Promise<StartedRoom> {
+  const host = await newMobilePlayer(browser, `${namePrefix}Host`);
+  const guests = await Promise.all(
+    Array.from({ length: playerCount - 1 }, (_, index) =>
+      newMobilePlayer(browser, `${namePrefix}P${index + 2}`)
+    )
+  );
+  const players = [host, ...guests];
+  const errorBuckets = players.map((player) => trackPageErrors(player.page));
+
+  const roomId = await createRoom(host.page, host.name);
+  for (const guest of guests) {
+    await joinRoom(guest.page, roomId, guest.name);
+  }
+
+  await expect(host.page.getByTestId("mobile-game-table")).toBeVisible();
+  await expect(host.page.getByTestId("start-game-button")).toBeEnabled();
+  await host.page.getByTestId("start-game-button").click();
+
+  for (const player of players) {
+    await expect(player.page.getByTestId("mobile-game-table")).toBeVisible();
     await expect(player.page.getByTestId("playing-card").first()).toBeVisible();
     await expect(player.page.locator("body")).toContainText(roomId);
   }
@@ -206,6 +247,34 @@ async function expectLocatorBoxesInsideParent(
     expect(childBox, `${label} ${index + 1} should be visible`).toBeTruthy();
     expectBoxInBounds(childBox!, parentBox!, `${label} ${index + 1}`, 2);
   }
+}
+
+async function expectNoDocumentHorizontalOverflow(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        ),
+      { message: "document should not horizontally overflow", timeout: 10_000 }
+    )
+    .toBeLessThanOrEqual(2);
+}
+
+async function expectMobileCompactCardsUseFaceLayout(page: Page): Promise<void> {
+  const visibleHandCards = page.locator(
+    '[data-testid="hand-zone"] [data-testid="playing-card"]'
+  );
+  await expect(visibleHandCards.first()).toBeVisible();
+
+  const layoutModes = await visibleHandCards
+    .evaluateAll((cards) =>
+      cards.slice(0, 8).map((card) => card.getAttribute("data-card-layout"))
+    );
+  expect(
+    layoutModes.every((mode) => mode === "face"),
+    "compact mobile hand cards should use the readable face layout"
+  ).toBe(true);
 }
 
 async function clickNextPlayableCard(
@@ -783,4 +852,140 @@ test.describe("large table layout", () => {
       }
     });
   }
+});
+
+test.describe("mobile table layout", () => {
+  test("4 players can start and play several turns on a phone viewport", async ({
+    browser,
+  }, testInfo) => {
+    const { host, players, roomId, errorBuckets } = await setupStartedMobileRoom(
+      browser,
+      4,
+      "E2EMobile4"
+    );
+
+    try {
+      await expect(host.page.locator("body")).toContainText(/Round\s+1\s*\/\s*4/i);
+      await expect(host.page.getByTestId("mobile-game-table")).toBeVisible();
+      await expect(host.page.getByTestId("player-seat")).toHaveCount(4);
+      await expectLocatorBoxesInViewport(
+        host.page,
+        host.page.getByTestId("hand-zone"),
+        "mobile 4-player hand zone"
+      );
+      await expectNoDocumentHorizontalOverflow(host.page);
+
+      await expectMobileCompactCardsUseFaceLayout(host.page);
+      await playUntilVisiblePlayedCards(players, host.page, 3);
+      await expect(host.page.getByTestId("played-card")).toHaveCount(3);
+      await expectLocatorBoxesInViewport(
+        host.page,
+        host.page.getByTestId("played-card"),
+        "mobile 4-player played card"
+      );
+      await expectLocatorBoxesInsideParent(
+        host.page.getByTestId("played-card"),
+        host.page.getByTestId("game-table"),
+        "mobile 4-player played card"
+      );
+      await testInfo.attach("mobile-4-player-table", {
+        body: await host.page.screenshot({ fullPage: false }),
+        contentType: "image/png",
+      });
+
+      await expect(host.page.locator("body")).toContainText(roomId);
+      expect(errorBuckets.flat()).toEqual([]);
+    } finally {
+      await closePlayers(players);
+    }
+  });
+
+  test("round result blocks card exchange until it is closed on a phone viewport", async ({
+    browser,
+  }, testInfo) => {
+    test.slow();
+    const { host, players, roomId, errorBuckets } = await setupStartedMobileRoom(
+      browser,
+      4,
+      "E2EMobileRound"
+    );
+
+    try {
+      const actionCount = await playUntilRound(
+        players,
+        host.page,
+        /Round\s+2\s*\/\s*4/i
+      );
+      expect(actionCount).toBeGreaterThan(0);
+
+      await expect(host.page.getByTestId("mobile-game-table")).toBeVisible();
+      await expect(host.page.getByTestId("round-result-panel")).toBeVisible();
+      await expect(host.page.getByTestId("round-result-close-button")).toBeVisible();
+      await expect(host.page.getByTestId("pass-panel")).toHaveCount(0);
+      await expect(
+        host.page.locator('[data-testid="hand-zone"] [data-testid="playing-card"]')
+      ).toHaveCount(0);
+      await expectNoDocumentHorizontalOverflow(host.page);
+
+      await testInfo.attach("mobile-round-result-before-close", {
+        body: await host.page.screenshot({ fullPage: false }),
+        contentType: "image/png",
+      });
+
+      await host.page.getByTestId("round-result-close-button").click();
+      await expect(host.page.getByTestId("round-result-panel")).toHaveCount(0);
+      await expect(host.page.getByTestId("pass-panel")).toBeVisible();
+      await expect(host.page.getByTestId("playing-card").first()).toBeVisible();
+      await expectMobileCompactCardsUseFaceLayout(host.page);
+      await expectNoDocumentHorizontalOverflow(host.page);
+
+      await testInfo.attach("mobile-round-result-after-close", {
+        body: await host.page.screenshot({ fullPage: false }),
+        contentType: "image/png",
+      });
+
+      await expect(host.page.locator("body")).toContainText(roomId);
+      expect(errorBuckets.flat()).toEqual([]);
+    } finally {
+      await closePlayers(players);
+    }
+  });
+
+  test("10 players keep the mobile table, hand, and played cards in bounds", async ({
+    browser,
+  }, testInfo) => {
+    const { host, players, roomId, errorBuckets } = await setupStartedMobileRoom(
+      browser,
+      10,
+      "E2EMobile10"
+    );
+
+    try {
+      await expect(host.page.locator("body")).toContainText(/Round\s+1\s*\/\s*10/i);
+      await expect(host.page.getByTestId("mobile-game-table")).toBeVisible();
+      await expect(host.page.getByTestId("player-seat")).toHaveCount(10);
+      await expectLocatorBoxesInViewport(
+        host.page,
+        host.page.getByTestId("hand-zone"),
+        "mobile 10-player hand zone"
+      );
+      await expectNoDocumentHorizontalOverflow(host.page);
+
+      await playUntilVisiblePlayedCards(players, host.page, 4);
+      await expectLocatorBoxesInViewport(
+        host.page,
+        host.page.getByTestId("played-card"),
+        "mobile 10-player played card"
+      );
+      await testInfo.attach("mobile-10-player-table", {
+        body: await host.page.screenshot({ fullPage: false }),
+        contentType: "image/png",
+      });
+
+      await expect(host.page.locator("body")).toContainText(roomId);
+      expect(errorBuckets.flat()).toEqual([]);
+    } finally {
+      await closePlayers(players);
+    }
+  });
 });

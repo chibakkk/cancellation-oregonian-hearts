@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlayingCardV2 } from "./PlayingCardV2";
+import { MobileGameTable } from "./MobileGameTable";
 import { RulesContent } from "./RulesContent";
 import { useGame } from "../context/useGame";
 import type { Card, CompletedTrickView, PlayedCard, PlayerView, StoredResult, Trick } from "../types/coh";
@@ -148,6 +149,22 @@ function playedCardPosition(index: number, count: number): {
   };
 }
 
+function useIsMobileTable() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia("(max-width: 767px)").matches
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  return isMobile;
+}
+
 function PlayerSeat({
   player,
   active,
@@ -209,7 +226,7 @@ function PlayerSeat({
   );
 }
 
-export default function NewGameTable() {
+function DesktopGameTable() {
   const navigate = useNavigate();
   const { state, myPlayerId, startGame, passCards, playCard, restartGame } =
     useGame();
@@ -380,6 +397,7 @@ export default function NewGameTable() {
       state.phase !== "finished" &&
       !isPreviewingCompletedTrick
   );
+  const isRoundResultBlocking = showRoundResultPanel;
 
   const showHandHint = (cardId: string, message: string) => {
     if (handHintTimer.current) {
@@ -605,7 +623,8 @@ export default function NewGameTable() {
                 </div>
                 <button
                   type="button"
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700"
+                  data-testid="round-result-close-button"
+                  className="animate-pulse rounded-md border border-slate-950 bg-slate-950 px-3 py-1.5 text-sm font-semibold text-white shadow-sm"
                   onClick={() => latestSummaryId && setDismissedRoundResultId(latestSummaryId)}
                 >
                   閉じる
@@ -803,8 +822,11 @@ export default function NewGameTable() {
               );
             })}
 
-          {state.phase === "passing" && !isPreviewingCompletedTrick && (
-            <div className="absolute bottom-[13.5rem] left-1/2 z-20 w-[min(92%,560px)] -translate-x-1/2 rounded-md border border-white/50 bg-white/92 p-4 shadow-sm">
+          {state.phase === "passing" && !isPreviewingCompletedTrick && !isRoundResultBlocking && (
+            <div
+              data-testid="pass-panel"
+              className="absolute bottom-[13.5rem] left-1/2 z-20 w-[min(92%,560px)] -translate-x-1/2 rounded-md border border-white/50 bg-white/92 p-4 shadow-sm"
+            >
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-lg font-bold">3枚渡す</div>
@@ -859,6 +881,7 @@ export default function NewGameTable() {
               </div>
               <div className="flex min-h-32 gap-2">
                 {!isPreviewingPreviousRound &&
+                  !isRoundResultBlocking &&
                   state.myHand.map((card) => {
                     const selected = selectedPassIds.includes(card.id);
                     const canSelectForPassing =
@@ -990,4 +1013,9 @@ export default function NewGameTable() {
       )}
     </main>
   );
+}
+
+export default function NewGameTable() {
+  const isMobile = useIsMobileTable();
+  return isMobile ? <MobileGameTable /> : <DesktopGameTable />;
 }
