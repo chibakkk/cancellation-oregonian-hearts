@@ -75,6 +75,8 @@ test("home hero cards stay inside a phone viewport", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByTestId("home-mini-card")).toHaveCount(4);
+  await expect(page.getByTestId("connection-badge")).toBeHidden();
+  await expect(page.getByTestId("home-connection-status")).toBeHidden();
 
   const layout = await page.evaluate(() => {
     const viewport = {
@@ -106,6 +108,27 @@ test("home hero cards stay inside a phone viewport", async ({ page }) => {
     expect(card.right).toBeLessThanOrEqual(layout.viewport.width);
     expect(card.top).toBeGreaterThanOrEqual(0);
     expect(card.bottom).toBeLessThanOrEqual(layout.viewport.height);
+  }
+});
+
+test("game room id can be copied to the clipboard", async ({ browser }) => {
+  const context = await browser.newContext({
+    permissions: ["clipboard-read", "clipboard-write"],
+  });
+  const page = await context.newPage();
+
+  try {
+    const roomId = await createRoom(page, "CopyHost");
+    const copyButton = page.getByTestId("room-id-copy-button");
+
+    await expect(copyButton).toBeVisible();
+    await copyButton.click();
+    await expect(copyButton).toContainText("コピー済み");
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(roomId);
+  } finally {
+    await context.close();
   }
 });
 

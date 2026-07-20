@@ -31,7 +31,7 @@ export function ConnectionBadge() {
   return (
     <div
       data-testid="connection-badge"
-      className="fixed right-4 top-4 z-50 max-w-72 rounded-md border border-white/40 bg-white/92 px-3 py-2 text-sm shadow-sm backdrop-blur"
+      className="fixed right-4 top-4 z-50 hidden max-w-72 rounded-md border border-white/40 bg-white/92 px-3 py-2 text-sm shadow-sm backdrop-blur sm:block"
     >
       <div className="flex items-center gap-2 text-slate-800">
         <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />

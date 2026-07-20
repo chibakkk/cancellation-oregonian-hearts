@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { PlayingCardV2 } from "./PlayingCardV2";
 import { MobileGameTable } from "./MobileGameTable";
 import { RulesContent } from "./RulesContent";
+import { RoomIdCopy } from "./RoomIdCopy";
 import { useGame } from "../context/useGame";
 import type { Card, CompletedTrickView, PlayedCard, PlayerView, StoredResult, Trick } from "../types/coh";
 
@@ -484,9 +485,7 @@ function DesktopGameTable() {
         >
           <div className="absolute inset-6 rounded-full border border-emerald-700 bg-emerald-800 shadow-inner" />
           <div className="absolute left-4 top-4 z-20 rounded-md bg-white/90 px-4 py-3 shadow-sm">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Room {state.roomId}
-            </div>
+            <RoomIdCopy roomId={state.roomId} />
             <div className="mt-1 text-lg font-bold">
               {displayPhase === "waiting" && "待機中"}
               {displayPhase === "passing" && "カード交換"}

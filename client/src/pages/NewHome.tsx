@@ -154,7 +154,7 @@ export function NewHome() {
               </div>
               <div
                 data-testid="home-connection-status"
-                className="shrink-0 rounded-md border border-white/20 bg-white/12 px-3 py-2 text-sm font-semibold text-emerald-50 backdrop-blur"
+                className="hidden shrink-0 rounded-md border border-white/20 bg-white/12 px-3 py-2 text-sm font-semibold text-emerald-50 backdrop-blur sm:block"
               >
                 {connectionStatus}
               </div>

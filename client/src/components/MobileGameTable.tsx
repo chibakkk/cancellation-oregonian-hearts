@@ -4,6 +4,7 @@ import { useGame } from "../context/useGame";
 import type { Card, CompletedTrickView, PlayedCard, PlayerView, StoredResult, Trick } from "../types/coh";
 import { PlayingCardV2 } from "./PlayingCardV2";
 import { RulesContent } from "./RulesContent";
+import { RoomIdCopy } from "./RoomIdCopy";
 
 const SUIT_LABEL: Record<Card["suit"], string> = {
   hearts: "ハート",
@@ -403,9 +404,7 @@ export function MobileGameTable() {
       <header className="sticky top-0 z-40 border-b border-white/15 bg-emerald-950/95 px-3 py-2 text-white shadow-sm backdrop-blur">
         <div className="flex items-start justify-between gap-2 pr-24">
           <div>
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/70">
-              Room {state.roomId}
-            </div>
+            <RoomIdCopy roomId={state.roomId} tone="dark" />
             <div className="mt-0.5 flex items-center gap-2">
               <span className="text-lg font-black">{phaseLabel(displayPhase)}</span>
               <span className="rounded bg-white/12 px-2 py-0.5 text-xs font-bold">
