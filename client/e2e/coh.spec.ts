@@ -70,6 +70,45 @@ test("home focuses on joining and links to the room creation page", async ({
   expect(errors).toEqual([]);
 });
 
+test("home hero cards stay inside a phone viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/");
+
+  await expect(page.getByTestId("home-mini-card")).toHaveCount(4);
+
+  const layout = await page.evaluate(() => {
+    const viewport = {
+      height: window.innerHeight,
+      width: window.innerWidth,
+    };
+    const cards = Array.from(
+      document.querySelectorAll('[data-testid="home-mini-card"]')
+    ).map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+      };
+    });
+
+    return {
+      cards,
+      hasHorizontalOverflow: document.documentElement.scrollWidth > viewport.width,
+      viewport,
+    };
+  });
+
+  expect(layout.hasHorizontalOverflow).toBe(false);
+  for (const card of layout.cards) {
+    expect(card.left).toBeGreaterThanOrEqual(0);
+    expect(card.right).toBeLessThanOrEqual(layout.viewport.width);
+    expect(card.top).toBeGreaterThanOrEqual(0);
+    expect(card.bottom).toBeLessThanOrEqual(layout.viewport.height);
+  }
+});
+
 async function joinRoom(page: Page, roomId: string, playerName: string): Promise<void> {
   await page.goto("/");
   await page.getByTestId("player-name-input").fill(playerName);

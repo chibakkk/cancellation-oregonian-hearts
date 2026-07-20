@@ -53,15 +53,16 @@ function MiniCard({
 
   return (
     <div
-      className={`absolute left-1/2 top-1/2 h-40 w-28 rounded-md border border-slate-200 bg-white p-3 shadow-xl ${color}`}
+      data-testid="home-mini-card"
+      className={`absolute left-1/2 top-1/2 h-32 w-20 rounded-md border border-slate-200 bg-white p-2 shadow-xl sm:h-36 sm:w-24 sm:p-2.5 md:h-40 md:w-28 md:p-3 ${color}`}
       style={{ transform }}
     >
-      <div className="text-lg font-black leading-none">{rank}</div>
-      <div className="mt-1 text-2xl leading-none">{suit}</div>
-      <div className="absolute bottom-3 right-3 rotate-180 text-lg font-black leading-none">
+      <div className="text-base font-black leading-none sm:text-lg">{rank}</div>
+      <div className="mt-1 text-xl leading-none sm:text-2xl">{suit}</div>
+      <div className="absolute bottom-2 right-2 rotate-180 text-base font-black leading-none sm:bottom-2.5 sm:right-2.5 sm:text-lg md:bottom-3 md:right-3">
         {rank}
       </div>
-      <div className="absolute bottom-8 right-3 rotate-180 text-2xl leading-none">
+      <div className="absolute bottom-6 right-2 rotate-180 text-xl leading-none sm:bottom-7 sm:right-2.5 sm:text-2xl md:bottom-8 md:right-3">
         {suit}
       </div>
     </div>
@@ -159,8 +160,8 @@ export function NewHome() {
               </div>
             </header>
 
-            <div className="relative mt-8 flex flex-1 items-center justify-center py-10">
-              <div className="relative h-72 w-full max-w-lg">
+            <div className="relative mt-6 flex flex-1 items-center justify-center py-6 sm:mt-8 sm:py-10">
+              <div className="relative h-52 w-full max-w-lg sm:h-64 md:h-72">
                 <MiniCard
                   rank="Q"
                   suit="♠"
