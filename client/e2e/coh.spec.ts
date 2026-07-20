@@ -422,6 +422,17 @@ async function playUntilRound(
   throw new Error(`Round did not reach ${roundPattern} within ${maxActions} actions`);
 }
 
+async function closeRoundResultIfVisible(page: Page): Promise<void> {
+  const closeButton = page.getByTestId("round-result-close-button");
+  if ((await closeButton.count()) === 0) {
+    return;
+  }
+  if (await closeButton.first().isVisible()) {
+    await closeButton.first().click();
+    await expect(page.getByTestId("round-result-panel")).toHaveCount(0);
+  }
+}
+
 async function playUntilVisiblePlayedCards(
   players: PlayerSession[],
   hostPage: Page,
@@ -822,6 +833,7 @@ test("ten players can complete round 1 and enter round 2", async ({ browser }) =
     await expect(host.page.locator("body")).toContainText(/Round\s+2\s*\/\s*10/i);
     await expect(host.page.locator("body")).toContainText(roomId);
     await expect(host.page.getByTestId("player-seat")).toHaveCount(10);
+    await closeRoundResultIfVisible(host.page);
     await expect(host.page.getByTestId("playing-card").first()).toBeVisible();
     expect(errorBuckets.flat()).toEqual([]);
   } finally {
